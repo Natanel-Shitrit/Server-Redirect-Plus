@@ -1,8 +1,19 @@
+enum
+{
+	SQL_FIELD_ADVERTISEMENT_ID = 0,
+	SQL_FIELD_ADVERTISEMENT_SERVER_ID,
+	SQL_FIELD_ADVERTISEMENT_SERVER_ID_TO_ADVERTISE,
+	SQL_FIELD_ADVERTISEMENT_REPEAT_TIME,
+	SQL_FIELD_ADVERTISEMENT_COOLDOWN_TIME,
+	SQL_FIELD_ADVERTISEMENT_PLAYER_RANGE,
+	SQL_FIELD_ADVERTISEMENT_MESSAGE
+}
+
 public Plugin myinfo = 
 {
 	name = "[Server-List] Advertisements", 
 	author = "Natanel 'LuqS'", 
-	description = "Advertisements of 'Server-Redirect+', offer variety of options to advertise other servers.", 
+	description = "Advertisements of 'Server-Redirect+', a variety of options to advertise other servers.", 
 	version = "1.3", 
 	url = "https://steamcommunity.com/id/luqsgood | Discord: LuqS#6505"
 };
@@ -10,8 +21,10 @@ public Plugin myinfo =
 //====================[ EVENTS ]=====================//
 public Action OnClientSayCommand(int client, const char[] command, const char[] args)
 {
+	// Client is editing something?
 	if(g_iUpdateAdvProprietary[client] != UPDATE_NOTHING)
 	{
+		// Yes, but the client wants to exit edit mode without editing.
 		if(!StrEqual(args, "-1"))
 		{
 			switch(g_iUpdateAdvProprietary[client])
@@ -67,14 +80,22 @@ public Action Timer_Loop(Handle hTimer)
 {
 	++g_iTimerCounter;
 	
+	// Loop throw all the advertisements (all valid advertisements).
 	for (int iCurrentAdvertisement = 0; iCurrentAdvertisement < MAX_ADVERTISEMENTS; iCurrentAdvertisement++)
 	{
+		// Get the advertisement repeat time.
 		int iAdvertisementRepeatTime = g_advAdvertisements[iCurrentAdvertisement].iRepeatTime;
 		
-		if(iAdvertisementRepeatTime && g_iTimerCounter % iAdvertisementRepeatTime == 0)
+		// If this advertisement is invalid, everything after it would be the same because we are loading the all of the advertisements to the start of the array.
+		if(!iAdvertisementRepeatTime)
+			break;
+		
+		// If this is the time to post the advertisement, go for it.
+		if(g_iTimerCounter % iAdvertisementRepeatTime == 0)
 			PostAdvertisement(g_advAdvertisements[iCurrentAdvertisement].iServerIDToAdvertise, ADVERTISEMENT_LOOP, iCurrentAdvertisement);
 	}
 	
+	// Never gonna stop this timer! :)
 	return Plugin_Continue;
 }
 
@@ -86,10 +107,10 @@ public Action Command_EditServerRedirectAdvertisements(int client, int args)
 		LogMessage(" <-- Command_EditServerRedirectAdvertisements | Fired by %N (%d)", client, client);
 	
 	Menu mEditAdvertisements = new Menu(EditAdvertisementsMenuHandler);
-	//mEditAdvertisements.SetTitle("%t", "MenuTitleEditAdvertisements", PREFIX_NO_COLOR);
-	mEditAdvertisements.SetTitle("%s Edit Advertisements\n ", PREFIX_NO_COLOR);
+	mEditAdvertisements.SetTitle("%t\n ", "MenuTitleEditAdvertisements", PREFIX_NO_COLOR);
 	
-	//mEditAdvertisements.SetTitle("%t", "MenuTitleAddAdvertisement", PREFIX_NO_COLOR);
+	char sBuffer[64];
+	Format(sBuffer, sizeof(sBuffer), "%t\n ", "AddAdvertisementEditMenu");
 	mEditAdvertisements.AddItem("", "Add Advertisement\n ");
 	
 	if(LoadMenuAdvertisements(mEditAdvertisements) == 0)
@@ -111,21 +132,16 @@ public int EditAdvertisementsMenuHandler(Menu EditAdvertisementsMenu, MenuAction
 		case MenuAction_Select:
 		{
 			if(Clicked == 0)
-			{
 				g_advToEdit.iAdvID = -1;
-				EditAdvertisementPropertiesMenu(client);
-			}
 			else
 			{
 				char sAdvertisementID[3];
 				EditAdvertisementsMenu.GetItem(Clicked, sAdvertisementID, sizeof(sAdvertisementID));
 				
-				if(!StrEqual(sAdvertisementID, ""))
-				{
-					LoadAdvToEdit(StringToInt(sAdvertisementID));
-					EditAdvertisementPropertiesMenu(client);
-				}
+				LoadAdvToEdit(StringToInt(sAdvertisementID));
 			}
+			
+			EditAdvertisementPropertiesMenu(client);
 		}
 		case MenuAction_End:
 			delete EditAdvertisementsMenu;
@@ -138,46 +154,39 @@ stock void EditAdvertisementPropertiesMenu(int client)
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- EditAdvertisementPropertiesMenu");
 	
-	char sBuffer[MAX_BUFFER_SIZE];
+	char sBuffer[128];
 	
 	Menu mAddAdvertisement = new Menu(AddAdvertisementMenuHandler);
-	//mAddAdvertisement.SetTitle("%t", "MenuAddAdvTitle", PREFIX_NO_COLOR);
-	mAddAdvertisement.SetTitle("%s %s advertisement\n ", PREFIX_NO_COLOR, g_advToEdit.iAdvID == -1 ? "Add" : "Edit");
+	mAddAdvertisement.SetTitle("%s %t", PREFIX_NO_COLOR, g_advToEdit.iAdvID == -1 ? "MenuAddAdvActionAdd" : "MenuAddAdvActionEdit");
 	
-	//Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvServerToAdv",  g_advToEdit.iServerIDToAdvertise);
-	Format(sBuffer, sizeof(sBuffer), "Server to advertise: %d", g_advToEdit.iServerIDToAdvertise); 
+	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvServerToAdv",  g_advToEdit.iServerIDToAdvertise);
 	mAddAdvertisement.AddItem("AdvServerID", sBuffer);// 0
 	
-	//Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvMode", g_advToEdit.iRepeatTime >= 0 ? "LOOP" : g_advToEdit.iRepeatTime == -1 ? "MAP" : "PLAYERS");
-	Format(sBuffer, sizeof(sBuffer), "Advertisement mode: %s", g_advToEdit.iRepeatTime >= 0 ? "LOOP" : g_advToEdit.iRepeatTime == -1 ? "MAP" : "PLAYERS");
+	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvMode", g_advToEdit.iRepeatTime >= 0 ? "LOOP" : g_advToEdit.iRepeatTime == -1 ? "MAP" : "PLAYERS");
 	mAddAdvertisement.AddItem("AdvMode", sBuffer);// 1
 	
-	//Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvLoopTime", g_advToEdit.iRepeatTime);
-	Format(sBuffer, sizeof(sBuffer), "Advertisement loop time: %d", g_advToEdit.iRepeatTime);
+	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvLoopTime", g_advToEdit.iRepeatTime);
 	mAddAdvertisement.AddItem("AdvLoopTime", sBuffer, g_advToEdit.iRepeatTime >= 0 ? ITEMDRAW_DEFAULT : ITEMDRAW_IGNORE); // 2
 	
-	//Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvCooldownTime", g_advToEdit.iCoolDownTime);
-	Format(sBuffer, sizeof(sBuffer), "Advertisement cooldown time: %d", g_advToEdit.iCoolDownTime);
+	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvCooldownTime", g_advToEdit.iCoolDownTime);
 	mAddAdvertisement.AddItem("AdvLoopTime", sBuffer, g_advToEdit.iRepeatTime < 0 ? ITEMDRAW_DEFAULT : ITEMDRAW_IGNORE); // 3
 	
-	//Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvPlayerRange", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
-	Format(sBuffer, sizeof(sBuffer), "Advertisement player range: %d | %d", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
+	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvPlayerRange", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
 	mAddAdvertisement.AddItem("AdvPlayerRange", sBuffer, g_advToEdit.iRepeatTime == -2 ? ITEMDRAW_DEFAULT : ITEMDRAW_IGNORE); // 4
 	
 	char sAdvMessage[32];
 	CopyStringWithDots(sAdvMessage, sizeof(sAdvMessage), g_advToEdit.sMessageContent, sizeof(g_advToEdit.sMessageContent));
 	
-	//Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvMessage", sAdvMessage);
-	Format(sBuffer, sizeof(sBuffer), "Advertisement message: %s", sAdvMessage);
+	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvMessage", sAdvMessage);
 	mAddAdvertisement.AddItem("AdvPlayerRange", sBuffer); // 5
 	
 	char sAdvID[4];
 	IntToString(g_advToEdit.iAdvID, sAdvID, sizeof(sAdvID));
-	//mAddAdvertisement.AddItem(sAdvID, "%t", "MenuAddAdvAddAdv");
-	mAddAdvertisement.AddItem(sAdvID, g_advToEdit.iAdvID == -1 ? "Add Advertisement" : "Edit Advertisement"); // 6
+	Format(sBuffer, sizeof(sBuffer), "%t", g_advToEdit.iAdvID == -1 ? "MenuAddAdvActionAdd" : "MenuAddAdvActionEdit");
+	mAddAdvertisement.AddItem(sAdvID, sBuffer);
 	
-	//mAddAdvertisement.AddItem(sAdvID, "%t", "MenuAddAdvAddAdv");
-	mAddAdvertisement.AddItem(sAdvID, g_advToEdit.iAdvID == -1 ? "Reset Advertisement" : "Delete Advertisement"); // 7
+	Format(sBuffer, sizeof(sBuffer), "%t", g_advToEdit.iAdvID == -1 ? "MenuAddAdvActionReset" : "MenuAddAdvActionDelete");
+	mAddAdvertisement.AddItem(sAdvID, sBuffer);
 	
 	mAddAdvertisement.ExitButton = true;
 	
@@ -201,41 +210,54 @@ public int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction act
 			switch(Clicked)
 			{
 				case 0:
-					SelectServerToAdvMenu(client);
+				{
+					char sMenuTitle[128];
+					Format(sMenuTitle, sizeof(sMenuTitle), "%t\n ", "MenuTitleSelectServerToAdv", PREFIX_NO_COLOR);
+					SelectServerMainMenu(client, SelectServerToAdvMenuHandler, sMenuTitle, strlen(sMenuTitle), false);
+				}
 				case 1:
 				{
 					g_advToEdit.iRepeatTime = g_advToEdit.iRepeatTime >= 0 ? -1 : g_advToEdit.iRepeatTime == -1 ? -2 : 0;
 					EditAdvertisementPropertiesMenu(client);
 				}
 				case 2:
-					g_iUpdateAdvProprietary[client] = UPDATE_LOOP_TIME; 	// TODO: update loop time
+					g_iUpdateAdvProprietary[client] = UPDATE_LOOP_TIME; 	// update loop time
 				case 3:
-					g_iUpdateAdvProprietary[client] = UPDATE_COOLDOWN_TIME; // TODO: update cooldown
+					g_iUpdateAdvProprietary[client] = UPDATE_COOLDOWN_TIME; // update cooldown
 				case 4:
-					g_iUpdateAdvProprietary[client] = UPDATE_PLAYER_RANGE; 	// TODO: update player range
+					g_iUpdateAdvProprietary[client] = UPDATE_PLAYER_RANGE; 	// update player range
 				case 5:
 				{
 					if(!StrEqual(g_advToEdit.sMessageContent, ""))
-						PrintToChat(client, "%s \x02Editing\x01 Message: %s", PREFIX, g_advToEdit.sMessageContent);
+					{
+						CPrintToChat(client, "%t", "EditingAdvMessage", PREFIX);
+						PrintToChat(client, g_advToEdit.sMessageContent);
+					}
 						
-					g_iUpdateAdvProprietary[client] = UPDATE_ADV_MESSAGE; 	// TODO: update adv message
+					g_iUpdateAdvProprietary[client] = UPDATE_ADV_MESSAGE; 	// update adv message
 				}
 				case 6:
 				{
-					iAdvID == -1 ? AddAdvertisementToDB() : UpdateAdvertisementDB(iAdvID);		// TODO: Add / Edit adv
+					iAdvID == -1 ? AddAdvertisementToDB() : UpdateAdvertisementDB(iAdvID);		// Add / Edit adv
 					
 					ResetAdvToEdit();
 				}
 				case 7:
 				{
-					iAdvID == -1 ? ResetAdvToEdit() : DeleteAdvertisementDB(iAdvID);
+					if(iAdvID == -1)
+					{
+						ResetAdvToEdit();
+						EditAdvertisementPropertiesMenu(client);
+					}
+					else
+						DeleteAdvertisementDB(iAdvID);
 				}
 			}
 			
 			if(1 < Clicked < 6)
 			{
-				PrintToChat(client, "%s \x04Entered edit mode\x01, please enter the \x02value\x01 in chat!", PREFIX);
-				PrintToChat(client, "%s To \x02abort\x01 type \x04-1\x01.", PREFIX);
+				CPrintToChat(client, "%t", "EnteredEditingMode", PREFIX);
+				CPrintToChat(client, "%t", "AbortEditingMode", PREFIX);
 			}
 		}
 		case MenuAction_Cancel:
@@ -243,24 +265,6 @@ public int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction act
 		case MenuAction_End:
 			delete AddAdvertisementMenu;
 	}
-}
-
-// Load Servers to choose from them
-stock void SelectServerToAdvMenu(int client)
-{
-	Menu mSelectServerToAdv = new Menu(SelectServerToAdvMenuHandler);
-	//mServerList.SetTitle("%t", "MenuTitleSelectServerToAdv", PREFIX_NO_COLOR);
-	mSelectServerToAdv.SetTitle("%s Select Server to Advertise:\n ", PREFIX_NO_COLOR);
-	
-	int iNumOfPublicCategories 	= LoadMenuCategories(mSelectServerToAdv, client);
-	int iNumOfPublicServers 	= LoadMenuServers(mSelectServerToAdv, client, "");
-	
-	if(iNumOfPublicServers + iNumOfPublicCategories == 0)
-		CPrintToChat(client, "%t", "NoServersFound", PREFIX);
-	
-	mSelectServerToAdv.ExitButton = true;
-	
-	mSelectServerToAdv.Display(client, MENU_TIME_FOREVER);
 }
 
 public int SelectServerToAdvMenuHandler(Menu SelectServerToAdv, MenuAction action, int client, int Clicked)
@@ -272,12 +276,15 @@ public int SelectServerToAdvMenuHandler(Menu SelectServerToAdv, MenuAction actio
 	{
 		case MenuAction_Select:
 		{
-			char sBuffer[MAX_BUFFER_SIZE];
+			char sBuffer[MAX_CATEGORY_NAME_LENGHT];
 			SelectServerToAdv.GetItem(Clicked, sBuffer, sizeof(sBuffer));
 			
 			if(StrContains(sBuffer, "[C]") != -1)
 			{
-				SelectServerToAdvCategoryMenu(client, sBuffer[4]);
+				char sMenuTitle[128];
+				Format(sMenuTitle, sizeof(sMenuTitle), "%t", "MenuTitleSelectFromCategoryToAdv", PREFIX_NO_COLOR, sBuffer[4]);
+				
+				SelectServerMenu(client, sBuffer[4], SelectServerToAdvMenuHandler, sMenuTitle, strlen(sMenuTitle));
 			}
 			else
 			{
@@ -292,34 +299,13 @@ public int SelectServerToAdvMenuHandler(Menu SelectServerToAdv, MenuAction actio
 	}
 }
 
-// Load Category-Menu
-stock void SelectServerToAdvCategoryMenu(int client, char[] sCategory)
-{
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- SelectServerToAdvCategoryMenu");
-	
-	Menu mServerCategoryList = new Menu(SelectServerToAdvMenuHandler);
-	//mServerCategoryList.SetTitle("%t", "MenuTitleSelectFromCategoryToAdv", PREFIX_NO_COLOR, sCategory);
-	mServerCategoryList.SetTitle("%s Select Server from %s", PREFIX_NO_COLOR, sCategory);
-	
-	int iNumOfPublicServers = LoadMenuServers(mServerCategoryList, client, sCategory);
-	
-	if(iNumOfPublicServers == 0)
-		CPrintToChat(client, "%t", "NoServersFound", PREFIX);
-					
-	mServerCategoryList.ExitButton = true;
-	mServerCategoryList.ExitBackButton = true;
-			
-	mServerCategoryList.Display(client, MENU_TIME_FOREVER);
-}
-
 stock int LoadMenuAdvertisements(Menu hMenuToAdd)
 {
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadMenuAdvertisements");
 	
 	int iCurrentAdvertisement;
-	char sBuffer[MAX_BUFFER_SIZE];
+	char sBuffer[128];
 	
 	for (iCurrentAdvertisement = 0; iCurrentAdvertisement < MAX_ADVERTISEMENTS; iCurrentAdvertisement++) 
 	{
@@ -328,10 +314,23 @@ stock int LoadMenuAdvertisements(Menu hMenuToAdd)
 			int iServerIndex = GetServerIndexByServerID(g_advAdvertisements[iCurrentAdvertisement].iServerIDToAdvertise);
 			
 			char sServerName[32], sAdvMessage[32];
-			CopyStringWithDots(sServerName, sizeof(sServerName), g_srOtherServers[iServerIndex].sServerName, sizeof(g_srOtherServers[].sServerName));
 			CopyStringWithDots(sAdvMessage, sizeof(sAdvMessage), g_advAdvertisements[iCurrentAdvertisement].sMessageContent, sizeof(g_advAdvertisements[].sMessageContent));
 			
-			// 6 Template, 3 ServerID, TYPE - 7, 32 Strings == 80
+			if(iServerIndex != -1 && g_advAdvertisements[iCurrentAdvertisement].bActive)
+				CopyStringWithDots(sServerName, sizeof(sServerName), g_srOtherServers[iServerIndex].sServerName, sizeof(g_srOtherServers[].sServerName));
+			else
+			{
+				strcopy(sServerName, sizeof(sServerName), "*NOT ACTIVE*");
+				
+				LogError("%s #ERR: Couldn't find the server you are trying to advertise! (Server-ID - %d (%d), advertisement index - %d, Active - %b)",
+				PREFIX_NO_COLOR,
+				g_advAdvertisements[iCurrentAdvertisement].iServerIDToAdvertise,
+				iServerIndex,
+				iCurrentAdvertisement,
+				g_advAdvertisements[iCurrentAdvertisement].bActive
+				);
+			}
+			
 			Format(sBuffer, sizeof(sBuffer), "%s (ID %d - %s) | %s",
 			sServerName,
 			g_advAdvertisements[iCurrentAdvertisement].iServerIDToAdvertise,
@@ -350,75 +349,8 @@ stock int LoadMenuAdvertisements(Menu hMenuToAdd)
 }
 
 //======================[ DB ]=======================//
-// Updating the advertisement in the DB and refreshing the 
-stock void UpdateAdvertisementDB(int iAdvertisement)
-{
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- UpdateAdvertisementDB | iAdvertisement = %d", iAdvertisement);
-	
-	char sPlayersRange[6];
-	Format(sPlayersRange, sizeof(sPlayersRange), "%d|%d", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
-	
-	DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `server_id_to_adv` = %d, `adv_repeat_time` = %d, `adv_cooldown_time` = %d, `adv_players_range` = '%s', `adv_message` = '%s' WHERE `id` = %d",
-	g_advToEdit.iServerIDToAdvertise,
-	g_advToEdit.iRepeatTime,
-	g_advToEdit.iCoolDownTime,
-	sPlayersRange,
-	g_advToEdit.sMessageContent,
-	g_advToEdit.iAdvID
-	);
-	
-	
-	DB.Query(T_UpdateAdvertisementQuery, Query, false);
-}
-
-stock void DeleteAdvertisementDB(int iAdvertisement)
-{
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- DeleteAdvertisementDB | iAdvertisement = %d", iAdvertisement);	
-	
-	Format(Query, sizeof(Query), "DELETE FROM `server_redirect_advertisements` WHERE `id` = %d", iAdvertisement);	
-	
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage(Query);
-	
-	DB.Query(T_UpdateAdvertisementQuery, Query, false);
-}
-
-stock void AddAdvertisementToDB()
-{
-	char sPlayersRange[6];
-	Format(sPlayersRange, sizeof(sPlayersRange), "%d|%d", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
-	
-	DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_advertisements`(`server_id`, `server_id_to_adv`, `adv_repeat_time`, `adv_cooldown_time`, `adv_players_range`, `adv_message`) VALUES (%d, %d, %d, %d, '%s', '%s')",
-	g_srCurrentServer.iServerID,
-	g_advToEdit.iServerIDToAdvertise,
-	g_advToEdit.iRepeatTime,
-	g_advToEdit.iCoolDownTime,
-	sPlayersRange,
-	g_advToEdit.sMessageContent
-	);
-	
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage(Query);
-	
-	DB.Query(T_UpdateAdvertisementQuery, Query, false);
-}
-
-public void T_UpdateAdvertisementQuery(Handle owner, Handle hQuery, const char[] sError, any bStartTimer)
-{
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- T_UpdateAdvertisementQuery");
-	
-	if (hQuery != INVALID_HANDLE)
-	{
-		LoadAdvertisements(bStartTimer);
-	}
-	else
-		LogError("Error in T_FakeFastQuery: %s", sError);
-}
-
-stock void CreateAdvertisementsTable()
+// Create the DB Table if it's not already exists
+void CreateAdvertisementsTable()
 {
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- CreateAdvertisementsTable");
@@ -426,7 +358,8 @@ stock void CreateAdvertisementsTable()
 	DB.Query(T_OnAdvertisementsTableCreated, "CREATE TABLE IF NOT EXISTS `server_redirect_advertisements`(`id` INT NOT NULL AUTO_INCREMENT, `server_id` INT(11) NOT NULL, `server_id_to_adv` INT(11) NOT NULL, `adv_repeat_time` INT NOT NULL, `adv_cooldown_time` INT NOT NULL, `adv_players_range` VARCHAR(6) NOT NULL, `adv_message` VARCHAR(512) NOT NULL, PRIMARY KEY (`id`))", true, DBPrio_High);
 }
 
-public void T_OnAdvertisementsTableCreated(Handle owner, Handle hQuery, const char[] sError, any bStartTimer)
+// When the Table is created / we know there is a table
+void T_OnAdvertisementsTableCreated(Handle owner, Handle hQuery, const char[] sError, any bStartTimer)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- T_OnAdvertisementsTableCreated");
@@ -434,10 +367,11 @@ public void T_OnAdvertisementsTableCreated(Handle owner, Handle hQuery, const ch
 	if (hQuery != INVALID_HANDLE)
 		LoadAdvertisements(bStartTimer);
 	else
-		LogError("Error in T_OnAdvertisementsTableCreated: %s", sError);
+		SetFailState("Couldn't create Advertisements Table [Error: %s]", sError);
 }
 
-stock void LoadAdvertisements(bool bStartTimer)
+// Load the Advertisements from the Table
+void LoadAdvertisements(bool bStartTimer)
 {
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadAdvertisements");
@@ -446,7 +380,7 @@ stock void LoadAdvertisements(bool bStartTimer)
 	DB.Query(T_OnAdvertisementsRecive, Query, bStartTimer);
 }
 
-public void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] sError, any bStartTimer)
+void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] sError, any bStartTimer)
 {
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- T_OnAdvertisementsRecive");
@@ -457,18 +391,30 @@ public void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] s
 		
 		for (iCurrentAdvertisement = 0; iCurrentAdvertisement < MAX_ADVERTISEMENTS && SQL_FetchRow(hQuery); iCurrentAdvertisement++) 
 		{
-			g_advAdvertisements[iCurrentAdvertisement].iAdvID					= SQL_FetchIntByName(hQuery, "id"				);
-			g_advAdvertisements[iCurrentAdvertisement].iServerIDToAdvertise 	= SQL_FetchIntByName(hQuery, "server_id_to_adv"	);
-			g_advAdvertisements[iCurrentAdvertisement].iRepeatTime 				= SQL_FetchIntByName(hQuery, "adv_repeat_time"	);
-			g_advAdvertisements[iCurrentAdvertisement].iCoolDownTime 			= SQL_FetchIntByName(hQuery, "adv_cooldown_time");
+			g_advAdvertisements[iCurrentAdvertisement].iAdvID					= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_ID						);
+			g_advAdvertisements[iCurrentAdvertisement].iServerIDToAdvertise 	= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_SERVER_ID_TO_ADVERTISE	);
+			g_advAdvertisements[iCurrentAdvertisement].iRepeatTime 				= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_REPEAT_TIME				);
+			g_advAdvertisements[iCurrentAdvertisement].iCoolDownTime 			= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_COOLDOWN_TIME			);
 			int iServerIndex = GetServerIndexByServerID(g_advAdvertisements[iCurrentAdvertisement].iServerIDToAdvertise);
 			
 			char sRangeString[6];
-			SQL_FetchStringByName(hQuery, "adv_players_range", sRangeString, sizeof(sRangeString));
+			SQL_FetchString(hQuery, SQL_FIELD_ADVERTISEMENT_PLAYER_RANGE, sRangeString, sizeof(sRangeString));
 			
-			g_advAdvertisements[iCurrentAdvertisement].iPlayersRange = GetPlayerRangeFromString(sRangeString, g_srOtherServers[iServerIndex].iMaxPlayers); 
+			if(iServerIndex != -1)
+			{
+				g_advAdvertisements[iCurrentAdvertisement].bActive = true;	
+				g_advAdvertisements[iCurrentAdvertisement].iPlayersRange = GetPlayerRangeFromString(sRangeString, g_srOtherServers[iServerIndex].iMaxPlayers); 
+			}
+			else
+			{
+				LogError("%s #ERR: Couldn't find the server you are trying to advertise! (Server-ID - %d, advertisement index - %d)",
+				PREFIX_NO_COLOR,
+				g_advAdvertisements[iCurrentAdvertisement].iServerIDToAdvertise,
+				iCurrentAdvertisement
+				);
+			}
 			
-			SQL_FetchStringByName(hQuery, "adv_message", g_advAdvertisements[iCurrentAdvertisement].sMessageContent, sizeof(g_advAdvertisements[].sMessageContent));
+			SQL_FetchString(hQuery, SQL_FIELD_ADVERTISEMENT_MESSAGE, g_advAdvertisements[iCurrentAdvertisement].sMessageContent, sizeof(g_advAdvertisements[].sMessageContent));
 			
 			if(g_cvPrintDebug.BoolValue)
 				LogMessage("[T_OnAdvertisementsRecive -> LOOP] Advertisement %d (Index: %d): iServerIDToAdvertise - %d, iRepeatTime - %d, iCoolDownTime - %d, sMessageContent - %s",
@@ -491,10 +437,82 @@ public void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] s
 			if(bStartTimer)
 				CreateTimer(1.0, Timer_Loop, _, TIMER_REPEAT);
 		}
-			
 	}
 	else
-		LogError("Error: %s", sError);
+		SetFailState("Couldn't get server advertisements, Error: %s", sError);
+}
+
+// Add Advertisement to DB
+void AddAdvertisementToDB()
+{
+	char sPlayersRange[6];
+	Format(sPlayersRange, sizeof(sPlayersRange), "%d|%d", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
+	
+	DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_advertisements`(`server_id`, `server_id_to_adv`, `adv_repeat_time`, `adv_cooldown_time`, `adv_players_range`, `adv_message`) VALUES (%d, %d, %d, %d, '%s', '%s')",
+	g_srCurrentServer.iServerID,
+	g_advToEdit.iServerIDToAdvertise,
+	g_advToEdit.iRepeatTime,
+	g_advToEdit.iCoolDownTime,
+	sPlayersRange,
+	g_advToEdit.sMessageContent
+	);
+	
+	if(g_cvPrintDebug.BoolValue)
+		LogMessage("Query: %s", Query);
+	
+	DB.Query(T_UpdateAdvertisementQuery, Query, false);
+}
+
+// Update Advertisement in the DB
+void UpdateAdvertisementDB(int iAdvertisement)
+{
+	if(g_cvPrintDebug.BoolValue)
+		LogMessage(" <-- UpdateAdvertisementDB | iAdvertisement = %d", iAdvertisement);
+	
+	char sPlayersRange[6];
+	Format(sPlayersRange, sizeof(sPlayersRange), "%d|%d", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
+	
+	DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `server_id_to_adv` = %d, `adv_repeat_time` = %d, `adv_cooldown_time` = %d, `adv_players_range` = '%s', `adv_message` = '%s' WHERE `id` = %d",
+	g_advToEdit.iServerIDToAdvertise,
+	g_advToEdit.iRepeatTime,
+	g_advToEdit.iCoolDownTime,
+	sPlayersRange,
+	g_advToEdit.sMessageContent,
+	g_advToEdit.iAdvID
+	);
+	
+	if(g_cvPrintDebug.BoolValue)
+		LogMessage("Query: %s", Query);
+	
+	DB.Query(T_UpdateAdvertisementQuery, Query, false);
+}
+
+// Delete Advertisement from the DB
+void DeleteAdvertisementDB(int iAdvertisement)
+{
+	if(g_cvPrintDebug.BoolValue)
+		LogMessage(" <-- DeleteAdvertisementDB | iAdvertisement = %d", iAdvertisement);	
+	
+	Format(Query, sizeof(Query), "DELETE FROM `server_redirect_advertisements` WHERE `id` = %d", iAdvertisement);	
+	
+	if(g_cvPrintDebug.BoolValue)
+		LogMessage("Query: %s", Query);
+	
+	DB.Query(T_UpdateAdvertisementQuery, Query, false);
+}
+
+// DB callback
+void T_UpdateAdvertisementQuery(Handle owner, Handle hQuery, const char[] sError, any bStartTimer)
+{
+	if (g_cvPrintDebug.BoolValue)
+		LogMessage(" <-- T_UpdateAdvertisementQuery");
+	
+	if (hQuery != INVALID_HANDLE)
+	{
+		LoadAdvertisements(bStartTimer);
+	}
+	else
+		LogError("Error in T_FakeFastQuery: %s", sError);
 }
 
 //===================[ HELPING ]=====================//
@@ -504,64 +522,73 @@ stock void PostAdvertisement(int iServerID, int iAdvertisementMode = ADVERTISEME
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- PostAdvertisement | int iServerID = %d, int iAdvertisementMode = %d, int iAdvertisementIndex = %d", iServerID, iAdvertisementMode, iAdvertisementIndex);
 	
+	// If the caller didn't give the advertisement, try to find it.
 	if(iAdvertisementIndex == -1)
 		iAdvertisementIndex = FindAdvertisement(iServerID, iAdvertisementMode);
 	
-	if(iAdvertisementIndex != -1)
+	// If we still didn't find the advertisement, do not proceed.
+	if(iAdvertisementIndex == -1)
+		return;
+	
+	// If the advertisement is not active, do not proceed.
+	if(!g_advAdvertisements[iAdvertisementIndex].bActive)
+		return;
+	
+	// We are sure now that we have an advertisement to post and it's active, proceed.
+	char sMessageContent[512];
+	strcopy(sMessageContent, sizeof(sMessageContent), g_advAdvertisements[iAdvertisementIndex].sMessageContent);
+
+	// Get Server index.
+	int iServerIndex = GetServerIndexByServerID(iServerID);
+	
+	/*
+	// Skip if server index isn't found.
+	if(iServerIndex == -1)
 	{
-		char sMessageContent[512];
-		strcopy(sMessageContent, sizeof(sMessageContent), g_advAdvertisements[iAdvertisementIndex].sMessageContent);
-		
-		// Get Server index.
-		int iServerIndex = GetServerIndexByServerID(iServerID);
-		
-		// Skip if server index isn't found.
-		if(iServerIndex == -1)
-		{
-			LogError("Invalid Server index for ServerID = %d, not posting advertisement.", iServerIndex);
-			return;
-		}
-		
-		// Skip if Advertisements are disabled
-		if(!g_bEnableAdvertisements)
-		{
-			if(g_cvPrintDebug.BoolValue)
-				LogMessage("Advertisements are disabled, change 'PrefixRemover' to '1' in the plugin cfg to enable advertisements!");
-			return;
-		}
-		
-		// Skip if the server is down.
-		if(!g_bAdvertiseOfflineServers && !g_srOtherServers[iServerIndex].bServerStatus)
-		{
-			if(g_cvPrintDebug.BoolValue)
-				LogMessage("Not advertising because server is offline, change 'AdvertiseOfflineServers' to '1' in the plugin cfg to advertise offline servers!");
-			return;
-		}
-		
-		// Skip if on cooldown.
-		if (g_advAdvertisements[iAdvertisementIndex].iAdvertisedTime != 0 &&
-			g_advAdvertisements[iAdvertisementIndex].iCoolDownTime != 0 &&
-			g_advAdvertisements[iAdvertisementIndex].iAdvertisedTime + g_advAdvertisements[iAdvertisementIndex].iCoolDownTime > GetTime())
-			return;
-		
-		// Save the time when advertising.
-		g_advAdvertisements[iAdvertisementIndex].iAdvertisedTime = GetTime();
-		
-		// Replace strings to show the server data
-		FormatStringWithServerProperties(sMessageContent, sizeof(sMessageContent), iServerIndex);
-		
-		// If the server is Hidden, show only to authorized clients.		
-		if(!g_srOtherServers[iServerIndex].bShowInServerList)
-		{
-			Format(sMessageContent, sizeof(sMessageContent), "%t", "ServerHiddenMenu", sMessageContent);
-			
-			for (int iCurrentClient = 1; iCurrentClient <= MaxClients; iCurrentClient++)
-				if(ClientCanAccessToServer(iCurrentClient, iServerIndex))
-					PrintToChatNewLine(iCurrentClient, sMessageContent);
-		}
-		else // Else, show to everyone :)
-			PrintToChatAllNewLine(sMessageContent);
+		LogError("Invalid Server index for ServerID = %d, not posting advertisement.", iServerIndex);
+		return;
 	}
+	*/
+	
+	// Skip if Advertisements are disabled
+	if(!g_bEnableAdvertisements)
+	{
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage("Advertisements are disabled, change 'PrefixRemover' to '1' in the plugin cfg to enable advertisements!");
+		return;
+	}
+		
+	// Skip if the server is down (unless we want to post offline servers).
+	if(!g_bAdvertiseOfflineServers && !g_srOtherServers[iServerIndex].bServerStatus)
+	{
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage("Not advertising because server is offline, change 'AdvertiseOfflineServers' to '1' in the plugin cfg to advertise offline servers!");
+		return;
+	}
+	
+	// Skip if the advertisement is on cooldown.
+	if (g_advAdvertisements[iAdvertisementIndex].iAdvertisedTime != 0 &&
+		g_advAdvertisements[iAdvertisementIndex].iCoolDownTime != 0 &&
+		g_advAdvertisements[iAdvertisementIndex].iAdvertisedTime + g_advAdvertisements[iAdvertisementIndex].iCoolDownTime > GetTime())
+		return;
+		
+	// Save the time when advertising.
+	g_advAdvertisements[iAdvertisementIndex].iAdvertisedTime = GetTime();
+		
+	// Replace strings to show the server data
+	FormatStringWithServerProperties(sMessageContent, sizeof(sMessageContent), iServerIndex);
+		
+	// If the server is Hidden, show only to authorized clients.		
+	if(!g_srOtherServers[iServerIndex].bShowInServerList)
+	{
+		Format(sMessageContent, sizeof(sMessageContent), "%t", "ServerHiddenMenu", sMessageContent);
+		
+		for (int iCurrentClient = 1; iCurrentClient <= MaxClients; iCurrentClient++)
+			if(ClientCanAccessToServer(iCurrentClient, iServerIndex))
+				PrintToChatNewLine(iCurrentClient, sMessageContent);
+	}
+	else // Else, show to everyone :)
+		PrintToChatAllNewLine(sMessageContent);
 }
 
 // Loading an existing advertisement to the editable advertisement
@@ -583,20 +610,12 @@ stock void ResetAdvToEdit()
 	g_advToEdit = adv;
 }
 
-// Copying a string to it's destination and adding a '...' if the string isn't fully shown.
-stock void CopyStringWithDots(char[] sDest, int iDestLen, char[] sSource, int iSourceLen)
-{
-	strcopy(sDest, iDestLen, sSource);
-			
-	if(strlen(sSource) > iDestLen)
-		strcopy(sDest[iDestLen - 4], iDestLen, "...");
-}
-
 // Clearing the advertisement array from a given position to the end.
 stock void ClearAdvertisements(int iStartAdvertisement)
 {
 	Advertisement advClean;
 	
+	// Go throw all the advertisements (from where we told to start) and clean them 1 by 1 to the end.
 	for (int iCurrentAdvertisement = iStartAdvertisement; iCurrentAdvertisement < MAX_ADVERTISEMENTS; iCurrentAdvertisement++)
 		g_advAdvertisements[iCurrentAdvertisement] = advClean;
 }
@@ -643,7 +662,6 @@ stock int FindAdvertisement(int iServer, int iAdvertisementMode)
 		if (g_advAdvertisements[iCurrentAdvertisement].iServerIDToAdvertise == iServer &&
 			g_advAdvertisements[iCurrentAdvertisement].iRepeatTime == iAdvertisementMode)
 			return iCurrentAdvertisement;
-		
 	return -1;
 }
 
