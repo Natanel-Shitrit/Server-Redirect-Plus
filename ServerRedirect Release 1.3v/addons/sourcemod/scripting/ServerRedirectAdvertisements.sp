@@ -428,15 +428,13 @@ void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] sError, 
 			
 		}
 		
+		ClearAdvertisements(iCurrentAdvertisement);
+		
 		if(!iCurrentAdvertisement)
 			LogError("No Advertisements found in DB.");
-		else
-		{
-			ClearAdvertisements(iCurrentAdvertisement);
 			
-			if(bStartTimer)
-				CreateTimer(1.0, Timer_Loop, _, TIMER_REPEAT);
-		}
+		if(bStartTimer)
+			CreateTimer(1.0, Timer_Loop, _, TIMER_REPEAT);
 	}
 	else
 		SetFailState("Couldn't get server advertisements, Error: %s", sError);

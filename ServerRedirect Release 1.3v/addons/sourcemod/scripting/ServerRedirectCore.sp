@@ -324,7 +324,7 @@ public void T_OnDBConnected(Database dbMain, const char[] sError, any bOnlyConne
 		if(bOnlyConnect)
 			return;
 		
-		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS server_redirect_servers (`id` INT NOT NULL AUTO_INCREMENT, `server_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_category` VARCHAR(64) NOT NULL, `server_ip` INT NOT NULL, `server_port` INT NOT NULL, `server_status` INT NOT NULL, `server_visible` INT NOT NULL, `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL, `reserved_slots` INT NOT NULL, `max_players` INT NOT NULL, `bots_included` INT NOT NULL,`unix_lastupdate` TIMESTAMP NOT NULL, `timeout_time` INT NOT NULL, PRIMARY KEY (`id`), UNIQUE(`server_id`))", _, DBPrio_High);
+		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS server_redirect_servers (`id` INT NOT NULL AUTO_INCREMENT, `server_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_category` VARCHAR(64) NOT NULL, `server_ip` INT NOT NULL, `server_port` INT NOT NULL, `server_status` INT NOT NULL, `server_visible` INT NOT NULL, `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL, `reserved_slots` INT NOT NULL DEFAULT '0', `max_players` INT NOT NULL, `bots_included` INT NOT NULL,`unix_lastupdate` TIMESTAMP NOT NULL, `timeout_time` INT NOT NULL, PRIMARY KEY (`id`), UNIQUE(`server_id`))", _, DBPrio_High);
 		CreateAdvertisementsTable();
 	}
 }

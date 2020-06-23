@@ -366,7 +366,7 @@ stock int LoadMenuServers(Menu mMenu, int client, const char[] sCategory, int iT
 		LogMessage(" <-- LoadMenuServers");
 	
 	int iStringSize = (460 - iTitleLenght) / 6;
-	PrintToChatAll("%d", iTitleLenght);
+	
 	char[] sServerShowString = new char[iStringSize];
 	
 	int iNumOfPublicServers = 0;
@@ -388,9 +388,7 @@ stock int LoadMenuServers(Menu mMenu, int client, const char[] sCategory, int iT
 			FormatStringWithServerProperties(sServerShowString, iStringSize, iCurrentServer, client);
 		}
 		else
-		{
 			Format(sServerShowString, iStringSize, "%t", "ServerOfflineMenu", g_srOtherServers[iCurrentServer].sServerName);
-		}
 			
 		
 		char cServerID[3];
