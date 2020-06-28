@@ -87,7 +87,7 @@ public Action Timer_Loop(Handle hTimer)
 		int iAdvertisementRepeatTime = g_advAdvertisements[iCurrentAdvertisement].iRepeatTime;
 		
 		// If this advertisement is invalid, everything after it would be the same because we are loading the all of the advertisements to the start of the array.
-		if(!iAdvertisementRepeatTime)
+		if(iAdvertisementRepeatTime != 0)
 			break;
 		
 		// If this is the time to post the advertisement, go for it.
@@ -121,6 +121,7 @@ public Action Command_EditServerRedirectAdvertisements(int client, int args)
 	
 	return Plugin_Handled;
 }
+
 
 public int EditAdvertisementsMenuHandler(Menu EditAdvertisementsMenu, MenuAction action, int client, int Clicked)
 {
@@ -193,6 +194,7 @@ stock void EditAdvertisementPropertiesMenu(int client)
 	mAddAdvertisement.Display(client, MENU_TIME_FOREVER);
 	
 }
+
 
 public int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction action, int client, int Clicked)
 {
@@ -267,6 +269,7 @@ public int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction act
 	}
 }
 
+
 public int SelectServerToAdvMenuHandler(Menu SelectServerToAdv, MenuAction action, int client, int Clicked)
 {
 	if(g_cvPrintDebug.BoolValue)
@@ -298,6 +301,7 @@ public int SelectServerToAdvMenuHandler(Menu SelectServerToAdv, MenuAction actio
 		}
 	}
 }
+
 
 stock int LoadMenuAdvertisements(Menu hMenuToAdd)
 {
@@ -379,6 +383,7 @@ void LoadAdvertisements(bool bStartTimer)
 	DB.Format(Query, sizeof(Query), "SELECT * FROM `server_redirect_advertisements` WHERE `server_id` = %d", g_srCurrentServer.iServerID);
 	DB.Query(T_OnAdvertisementsRecive, Query, bStartTimer);
 }
+
 
 void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] sError, any bStartTimer)
 {
@@ -527,7 +532,7 @@ stock void PostAdvertisement(int iServerID, int iAdvertisementMode = ADVERTISEME
 	// If we still didn't find the advertisement, do not proceed.
 	if(iAdvertisementIndex == -1)
 		return;
-	
+		
 	// If the advertisement is not active, do not proceed.
 	if(!g_advAdvertisements[iAdvertisementIndex].bActive)
 		return;
@@ -651,6 +656,8 @@ stock int FindAdvertisement(int iServer, int iAdvertisementMode)
 		if (g_advAdvertisements[iCurrentAdvertisement].iServerIDToAdvertise == iServer &&
 			g_advAdvertisements[iCurrentAdvertisement].iRepeatTime == iAdvertisementMode)
 			return iCurrentAdvertisement;
+			
+			
 	return -1;
 }
 
