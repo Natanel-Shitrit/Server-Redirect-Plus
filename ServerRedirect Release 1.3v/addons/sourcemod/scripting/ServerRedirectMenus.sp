@@ -9,7 +9,8 @@ enum
 	SQL_FIELD_SERVER_VISIBLE,
 	SQL_FIELD_SERVER_MAP,
 	SQL_FIELD_SERVER_PLAYERS,
-	SQL_FIELD_SERVER_RESERVED,
+	SQL_FIELD_SERVER_RESERVED_SLOTS,
+	SQL_FIELD_SERVER_HIDDEN_SLOTS,
 	SQL_FIELD_SERVER_MAX_PLAYERS,
 	SQL_FIELD_SERVER_INCLUD_BOTS,
 	SQL_FIELD_SERVER_LAST_UPDATE,
@@ -42,10 +43,11 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 			g_srOtherServers[iCurrentServer].iServerID 	 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_ID);
 			g_srOtherServers[iCurrentServer].iServerIP32 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_IP);
 			g_srOtherServers[iCurrentServer].iServerPort 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_PORT);
-			g_srOtherServers[iCurrentServer].iReservedSlots = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_RESERVED);
+			g_srOtherServers[iCurrentServer].iReservedSlots = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_RESERVED_SLOTS);
 			
 			g_srOtherServers[iCurrentServer].bServerStatus 		= view_as<bool>(SQL_FetchInt(hQuery, SQL_FIELD_SERVER_STATUS));
 			g_srOtherServers[iCurrentServer].bShowInServerList 	= view_as<bool>(SQL_FetchInt(hQuery, SQL_FIELD_SERVER_VISIBLE));
+			g_srOtherServers[iCurrentServer].bHiddenSlots		= view_as<bool>(SQL_FetchInt(hQuery, SQL_FIELD_SERVER_HIDDEN_SLOTS));
 			g_srOtherServers[iCurrentServer].bIncludeBots 		= view_as<bool>(SQL_FetchInt(hQuery, SQL_FIELD_SERVER_INCLUD_BOTS));
 			
 			SQL_FetchString(hQuery, SQL_FIELD_SERVER_NAME, g_srOtherServers[iCurrentServer].sServerName, sizeof(g_srOtherServers[].sServerName));
@@ -60,9 +62,8 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 				
 				int iServerAdvertisement = FindAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_PLAYERS_RANGE);
 			
-				if (iServerAdvertisement != -1)
-					if (g_advAdvertisements[iServerAdvertisement].iPlayersRange[0] < g_srOtherServers[iCurrentServer].iNumOfPlayers < g_advAdvertisements[iServerAdvertisement].iPlayersRange[1])
-						PostAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_PLAYERS_RANGE);
+				if (iServerAdvertisement != -1 && g_advAdvertisements[iServerAdvertisement].iPlayersRange[0] < g_srOtherServers[iCurrentServer].iNumOfPlayers < g_advAdvertisements[iServerAdvertisement].iPlayersRange[1])
+					PostAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_PLAYERS_RANGE);
 				
 				char sOldMap[PLATFORM_MAX_PATH];
 				if (!StrEqual(g_srOtherServers[iCurrentServer].sServerMap, "", false))
@@ -152,16 +153,11 @@ public int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, i
 			char sMenuItemInfo[MAX_CATEGORY_NAME_LENGHT];
 			ListMenu.GetItem(Clicked, sMenuItemInfo, sizeof(sMenuItemInfo));
 			
-			// If it was the edit advertisement button, open the edit menu.
-			if (Clicked == 0 && StrEqual(sMenuItemInfo, "EditAdvertisements"))
-			{
+			if (Clicked == 0 && StrEqual(sMenuItemInfo, "EditAdvertisements"))	// If it was the edit advertisement button, open the edit menu.
 				Command_EditServerRedirectAdvertisements(client, 0);
-			}
-			// If it was a category, show the category servers
-			else if (String_StartsWith(sMenuItemInfo, "[C]"))
-			{
+			else if (String_StartsWith(sMenuItemInfo, "[C]")) 					// If it was a category, show the category servers
 				LoadCategoryMenu(client, sMenuItemInfo[4]);
-			}
+				
 			// If we ended up here the client clicked on a server, let's prepare the server menu.
 			else
 			{
@@ -180,7 +176,7 @@ public int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, i
 				Menu mServerInfo = new Menu(ServerInfoMenuHandler);
 				mServerInfo.SetTitle("%s [%s.%s.%s.%s:%d]\n ", g_srOtherServers[iServer].sServerName, ServerIP[0], ServerIP[1], ServerIP[2], ServerIP[3], g_srOtherServers[iServer].iServerPort);
 				
-				int iMaxPlayerWithReserved = g_srOtherServers[iServer].iMaxPlayers - (CanClientUseReservedSlots(client, iServer) ? 0 : g_srOtherServers[iServer].iReservedSlots);
+				int iMaxPlayerWithReserved = g_srOtherServers[iServer].iMaxPlayers - ((!g_srOtherServers[iServer].bHiddenSlots || CanClientUseReservedSlots(client, iServer)) ? 0 : g_srOtherServers[iServer].iReservedSlots);
 				
 				// Is the server full?
 				bool bIsServerFull = g_srOtherServers[iServer].iNumOfPlayers >= iMaxPlayerWithReserved;
@@ -213,10 +209,7 @@ public int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, i
 		case MenuAction_Cancel:
 		{
 			if (Clicked == MenuCancel_ExitBack)
-			{
 				Command_ServerList(client, 0);
-			}
-			
 		}
 		case MenuAction_End:
 		{
@@ -250,32 +243,28 @@ public int ServerInfoMenuHandler(Menu ServerInfoMenu, MenuAction action, int cli
 					char ServerIP[4][4];
 					GetIPv4FromIP32(g_srOtherServers[iServer].iServerIP32, ServerIP);
 					
-					CPrintToChat(client, "%t", "ServerInfoHeadline", PREFIX, g_srOtherServers[iServer].sServerName);
-					CPrintToChat(client, "%t", "ServerInfoIP", PREFIX, ServerIP[0], ServerIP[1], ServerIP[2], ServerIP[3], g_srOtherServers[iServer].iServerPort);
-					CPrintToChat(client, "%t", "ServerInfoMap", PREFIX, g_srOtherServers[iServer].sServerMap);
-					CPrintToChat(client, "%t", "ServerInfoPlayers", PREFIX, g_srOtherServers[iServer].iNumOfPlayers, g_srOtherServers[iServer].iMaxPlayers - (CanClientUseReservedSlots(client, iServer) ? 0 : g_srOtherServers[iServer].iReservedSlots));
+					CPrintToChat(client, "%t", "ServerInfoHeadline"	, PREFIX, g_srOtherServers[iServer].sServerName);
+					CPrintToChat(client, "%t", "ServerInfoIP"		, PREFIX, ServerIP[0], ServerIP[1], ServerIP[2], ServerIP[3], g_srOtherServers[iServer].iServerPort);
+					CPrintToChat(client, "%t", "ServerInfoMap"		, PREFIX, g_srOtherServers[iServer].sServerMap);
+					CPrintToChat(client, "%t", "ServerInfoPlayers"	, PREFIX, g_srOtherServers[iServer].iNumOfPlayers, g_srOtherServers[iServer].iMaxPlayers - ((!g_srOtherServers[iServer].bHiddenSlots || CanClientUseReservedSlots(client, iServer)) ? 0 : g_srOtherServers[iServer].iReservedSlots));
 				}
 				// Clicked on the redirect / join button.
 				case 3:
+				{
 					RedirectClientOnServer(client, g_srOtherServers[iServer].iServerIP32, g_srOtherServers[iServer].iServerPort);
+				}
 			}
 		}
 		case MenuAction_Cancel:
 		{
 			// Exit back to the menu (if was in a category - to the category, else - to the main menu)
 			if (!StrEqual(g_srOtherServers[iServer].sServerCategory, "", false))
-			{
 				LoadCategoryMenu(client, g_srOtherServers[iServer].sServerCategory);
-			}
 			else
-			{
 				Command_ServerList(client, 0);
-			}
 		}
 		case MenuAction_End:
-		{
 			delete ServerInfoMenu;
-		}
 	}
 }
 
@@ -290,7 +279,6 @@ stock void LoadServers()
 	
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage("[LoadServers] Query: %s", Query);
-	
 	
 	DB.Query(T_OnServersReceive, Query);
 }
@@ -382,7 +370,7 @@ stock int LoadMenuServers(Menu mMenu, int client, const char[] sCategory, int iT
 			
 		if (g_srOtherServers[iCurrentServer].bServerStatus)
 		{
-			if (g_srOtherServers[iCurrentServer].iNumOfPlayers >= g_srOtherServers[iCurrentServer].iMaxPlayers - (CanClientUseReservedSlots(client, iCurrentServer) ? 0 : g_srOtherServers[iCurrentServer].iReservedSlots))
+			if (g_srOtherServers[iCurrentServer].iNumOfPlayers >= g_srOtherServers[iCurrentServer].iMaxPlayers - ((!g_srOtherServers[iCurrentServer].bHiddenSlots || CanClientUseReservedSlots(client, iCurrentServer)) ? 0 : g_srOtherServers[iCurrentServer].iReservedSlots))
 				Format(sServerShowString, iStringSize, "%t", "ServerFullMenu", sServerShowString);
 				
 			FormatStringWithServerProperties(sServerShowString, iStringSize, iCurrentServer, client);
@@ -397,6 +385,7 @@ stock int LoadMenuServers(Menu mMenu, int client, const char[] sCategory, int iT
 		mMenu.AddItem(cServerID, sServerShowString, g_srOtherServers[iCurrentServer].bServerStatus ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
 		iNumOfPublicServers++;
 	}
+	
 	return iNumOfPublicServers;
 }
 
@@ -439,7 +428,7 @@ stock void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, i
 	iFormatSizeLeft -= 2 * ReplaceStringWithInt(sToFormat, iStringSize, "{current}", g_srOtherServers[iServerIndex].iNumOfPlayers, false);
 	
 	// MAX SERVER PLAYERS - SIZE 2
-	iFormatSizeLeft -= 2 * ReplaceStringWithInt(sToFormat, iStringSize, "{max}", g_srOtherServers[iServerIndex].iMaxPlayers - (CanClientUseReservedSlots(client, iServerIndex) ? 0 : g_srOtherServers[iServerIndex].iReservedSlots), false);
+	iFormatSizeLeft -= 2 * ReplaceStringWithInt(sToFormat, iStringSize, "{max}", g_srOtherServers[iServerIndex].iMaxPlayers - ((!g_srOtherServers[iServerIndex].bHiddenSlots || CanClientUseReservedSlots(client, iServerIndex)) ? 0 : g_srOtherServers[iServerIndex].iReservedSlots), false);
 	
 	// SERVER IP - SIZE 16
 	char sServerIPv4[4][4], sFullIPv4[17];

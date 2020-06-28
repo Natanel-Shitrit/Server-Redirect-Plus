@@ -539,15 +539,6 @@ stock void PostAdvertisement(int iServerID, int iAdvertisementMode = ADVERTISEME
 	// Get Server index.
 	int iServerIndex = GetServerIndexByServerID(iServerID);
 	
-	/*
-	// Skip if server index isn't found.
-	if(iServerIndex == -1)
-	{
-		LogError("Invalid Server index for ServerID = %d, not posting advertisement.", iServerIndex);
-		return;
-	}
-	*/
-	
 	// Skip if Advertisements are disabled
 	if(!g_bEnableAdvertisements)
 	{
@@ -572,7 +563,7 @@ stock void PostAdvertisement(int iServerID, int iAdvertisementMode = ADVERTISEME
 		
 	// Save the time when advertising.
 	g_advAdvertisements[iAdvertisementIndex].iAdvertisedTime = GetTime();
-		
+	
 	// Replace strings to show the server data
 	FormatStringWithServerProperties(sMessageContent, sizeof(sMessageContent), iServerIndex);
 		
@@ -636,7 +627,7 @@ stock void PrintToChatAllNewLine(char[] sMessage)
 {
 	char sMessageSplitted[12][128];
 	ExplodeString(sMessage, "\\n", sMessageSplitted, sizeof(sMessageSplitted), sizeof(sMessageSplitted[]));
-
+	
 	for (int iCurrentRow = 0; iCurrentRow < sizeof(sMessageSplitted); iCurrentRow++)
 		if(!StrEqual(sMessageSplitted[iCurrentRow], "", false))
 			CPrintToChatAll(sMessageSplitted[iCurrentRow]);
@@ -650,7 +641,7 @@ stock void PrintToChatNewLine(int client, char[] sMessage)
 
 	for (int iCurrentRow = 0; iCurrentRow < sizeof(sMessageSplitted); iCurrentRow++)
 		if(!StrEqual(sMessageSplitted[iCurrentRow], "", false))
-			CPrintToChat(client, sMessageSplitted[iCurrentRow]);
+			CPrintToChatAll(sMessageSplitted[iCurrentRow]);
 }
 
 // Returning the advertisement index given the server and the advertisement mode

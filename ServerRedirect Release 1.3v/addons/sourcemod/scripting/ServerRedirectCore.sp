@@ -37,7 +37,9 @@ int g_iTimerCounter;							// Timer For Advertisements
 ConVar 	g_cvUpdateOtherServersInterval; 		// Timer Interval for other servers update
 ConVar 	g_cvUpdateServerInterval; 				// Time between each update
 ConVar 	g_cvPrintDebug; 						// Debug Mode Status
+
 ConVar 	g_cvReservedSlots;
+ConVar 	g_cvHiddenSlots;
 
 bool 	g_bShowServerOnServerList; 				// Show this server in the Server-List?
 bool 	g_bEnableAdvertisements; 				// Should we advertise servers?
@@ -56,11 +58,11 @@ Regex rgCountStrings;
 enum struct Advertisement
 {
 	int iAdvID;					// Advertisement ID
-	int iServerIDToAdvertise;	// Advertised Server
 	int iRepeatTime;			// How long to wait between each advertise
 	int iCoolDownTime;			// How long should this advertisement should be on cooldown (for 'deffrence check' advertisements)
 	int iAdvertisedTime;		// Used for calculating if the advertisement should post
 	int iPlayersRange[2]; 		// 0 - MIN | 1 - MAX
+	int iServerIDToAdvertise;	// Advertised Server
 	
 	char sMessageContent[512];	// Message to print
 	
@@ -104,6 +106,7 @@ enum struct Server
 	
 	bool bShowInServerList;
 	bool bServerStatus;
+	bool bHiddenSlots;
 	bool bIncludeBots;
 }
 Server g_srCurrentServer;
@@ -153,7 +156,8 @@ public void OnPluginStart()
 	g_cvUpdateServerInterval 		= CreateConVar("server_redirect_server_update_interval"			, "20.0", "The number of seconds the plugin will wait before updating player count in the SQL server." 	, _, true, 0.0, true, 600.0	);
 	g_cvPrintDebug 					= CreateConVar("server_redirect_debug_mode"						, "0"	, "Whether or not to print debug messages in server console"									, _, true, 0.0, true, 1.0	);
 	
-	g_cvReservedSlots = FindConVar("sm_reserved_slots");
+	g_cvReservedSlots = FindConVar("sm_reserved_slots"	);
+	g_cvHiddenSlots	  = FindConVar("sm_hide_slots"		);
 	
 	//========================[ CVAR Change Hooks ]=====================//
 	g_cvUpdateOtherServersInterval.AddChangeHook(OnCvarChange);
@@ -324,7 +328,7 @@ public void T_OnDBConnected(Database dbMain, const char[] sError, any bOnlyConne
 		if(bOnlyConnect)
 			return;
 		
-		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS server_redirect_servers (`id` INT NOT NULL AUTO_INCREMENT, `server_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_category` VARCHAR(64) NOT NULL, `server_ip` INT NOT NULL, `server_port` INT NOT NULL, `server_status` INT NOT NULL, `server_visible` INT NOT NULL, `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL, `reserved_slots` INT NOT NULL DEFAULT '0', `max_players` INT NOT NULL, `bots_included` INT NOT NULL,`unix_lastupdate` TIMESTAMP NOT NULL, `timeout_time` INT NOT NULL, PRIMARY KEY (`id`), UNIQUE(`server_id`))", _, DBPrio_High);
+		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS server_redirect_servers (`id` INT NOT NULL AUTO_INCREMENT, `server_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_category` VARCHAR(64) NOT NULL, `server_ip` INT NOT NULL, `server_port` INT NOT NULL, `server_status` INT NOT NULL, `server_visible` INT NOT NULL, `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL, `reserved_slots` INT NOT NULL DEFAULT '0', `hidden_slots` INT(1) NOT NULL DEFAULT '0', `max_players` INT NOT NULL, `bots_included` INT NOT NULL, `unix_lastupdate` TIMESTAMP NOT NULL, `timeout_time` INT NOT NULL, PRIMARY KEY (`id`), UNIQUE(`server_id`))", _, DBPrio_High);
 		CreateAdvertisementsTable();
 	}
 }
@@ -376,13 +380,15 @@ stock void UpdateServer(int iWhatToUpdate, DBPriority dbPriority = DBPrio_Normal
 		}
 		case UPDATE_SERVER_START:
 		{
-			DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_name` = '%s', `server_ip` = %d, `server_port` = %d, `server_status` = %d, `server_visible` = %d, `max_players` = %d, `bots_included` = %b, `server_map` = '%s', `timeout_time` = %d WHERE `server_id` = %d",
+			DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_name` = '%s', `server_ip` = %d, `server_port` = %d, `server_status` = %d, `server_visible` = %d, `max_players` = %d, `reserved_slots` = %d, `hidden_slots` = %b, `bots_included` = %b, `server_map` = '%s', `timeout_time` = %d WHERE `server_id` = %d",
 			g_srCurrentServer.sServerName,
 			g_srCurrentServer.iServerIP32,
 			g_srCurrentServer.iServerPort,
 			g_srCurrentServer.bServerStatus,
 			g_srCurrentServer.bShowInServerList,
 			g_srCurrentServer.iMaxPlayers,
+			g_srCurrentServer.iReservedSlots,
+			g_srCurrentServer.bHiddenSlots,
 			g_srCurrentServer.bIncludeBots,
 			g_srCurrentServer.sServerMap,
 			g_iServerTimeOut,
@@ -402,7 +408,7 @@ stock void RegisterServer()
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- RegisterServer");
 	
-	DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_servers`(`server_id`, `server_name`, `server_category`, `server_ip`, `server_port`, `server_status`, `server_map`, `number_of_players`, `max_players`, `server_visible`, `timeout_time`) VALUES (%d, '%s', '%s', %d, %d, %d, '%s', %d, %d, %d, %d)", 
+	DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_servers`(`server_id`, `server_name`, `server_category`, `server_ip`, `server_port`, `server_status`, `server_map`, `number_of_players`, `max_players`, `reserved_slots`, `hidden_slots`, `server_visible`, `timeout_time`) VALUES (%d, '%s', '%s', %d, %d, %d, '%s', %d, %d, %d, %d, %b, %d)", 
 		g_srCurrentServer.iServerID, 
 		g_srCurrentServer.sServerName, 
 		g_srCurrentServer.sServerCategory, 
@@ -411,7 +417,9 @@ stock void RegisterServer()
 		g_srCurrentServer.bServerStatus, 
 		g_srCurrentServer.sServerMap, 
 		g_srCurrentServer.iNumOfPlayers, 
-		g_srCurrentServer.iMaxPlayers, 
+		g_srCurrentServer.iMaxPlayers,
+		g_srCurrentServer.iReservedSlots,
+		g_srCurrentServer.bHiddenSlots,
 		g_srCurrentServer.bShowInServerList,
 		g_iServerTimeOut
 		);
@@ -703,6 +711,9 @@ stock void GetServerInfo()
 	if(g_cvReservedSlots)
 		g_srCurrentServer.iReservedSlots = g_cvReservedSlots.IntValue;
 	
+	if(g_cvHiddenSlots)
+		g_srCurrentServer.bHiddenSlots = g_cvHiddenSlots.BoolValue;
+	
 	// Get the server Port
 	g_srCurrentServer.iServerPort = GetConVarInt(FindConVar("hostport"));
 	
@@ -782,7 +793,7 @@ stock bool String_EndsWith(const char[] str, const char[] subString)
 * This Release:
 * 1. [✓] Add an option to delete a sever from the database. (insted add a "time-out" so servers that didn't got updated in x min will get deleted) 
 * 2. [✗] Add an option to show / hide certian servers.
-* 3. [✓] Add reserve slot support for the player-count.
+* 3. [✓] Add reserve slot support for the player-count. FIX?[✓]
 *
 * Later Releases:
 * 1. [✗] Make the plugin more dynamic and use arraylist so i wont have to use fixed arrays
