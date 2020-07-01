@@ -53,7 +53,7 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 			SQL_FetchString(hQuery, SQL_FIELD_SERVER_NAME, g_srOtherServers[iCurrentServer].sServerName, sizeof(g_srOtherServers[].sServerName));
 			SQL_FetchString(hQuery, SQL_FIELD_SERVER_CATEGORY, g_srOtherServers[iCurrentServer].sServerCategory, sizeof(g_srOtherServers[].sServerCategory));
 			
-			// if the server is offline we don't want to load real-time data because it's not real-time,
+			// if the server is offline we don't want to load real-time data because it's not real-time (outdated),
 			// And we don't want to advertise Map-Changes / Player-Range Advertisements.
 			if (g_srOtherServers[iCurrentServer].bServerStatus)
 			{

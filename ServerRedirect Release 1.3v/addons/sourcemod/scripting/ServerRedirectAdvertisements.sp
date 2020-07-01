@@ -384,7 +384,7 @@ void LoadAdvertisements(bool bStartTimer)
 	DB.Query(T_OnAdvertisementsRecive, Query, bStartTimer);
 }
 
-
+// When we get the advertisements
 void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] sError, any bStartTimer)
 {
 	if(g_cvPrintDebug.BoolValue)
@@ -392,6 +392,7 @@ void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] sError, 
 		
 	if(hQuery != INVALID_HANDLE)
 	{
+		char sRangeString[6];
 		int iCurrentAdvertisement;
 		
 		for (iCurrentAdvertisement = 0; iCurrentAdvertisement < MAX_ADVERTISEMENTS && SQL_FetchRow(hQuery); iCurrentAdvertisement++) 
@@ -400,10 +401,11 @@ void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] sError, 
 			g_advAdvertisements[iCurrentAdvertisement].iServerIDToAdvertise 	= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_SERVER_ID_TO_ADVERTISE	);
 			g_advAdvertisements[iCurrentAdvertisement].iRepeatTime 				= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_REPEAT_TIME				);
 			g_advAdvertisements[iCurrentAdvertisement].iCoolDownTime 			= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_COOLDOWN_TIME			);
+			
 			int iServerIndex = GetServerIndexByServerID(g_advAdvertisements[iCurrentAdvertisement].iServerIDToAdvertise);
 			
-			char sRangeString[6];
 			SQL_FetchString(hQuery, SQL_FIELD_ADVERTISEMENT_PLAYER_RANGE, sRangeString, sizeof(sRangeString));
+			SQL_FetchString(hQuery, SQL_FIELD_ADVERTISEMENT_MESSAGE		, g_advAdvertisements[iCurrentAdvertisement].sMessageContent, sizeof(g_advAdvertisements[].sMessageContent));
 			
 			if(iServerIndex != -1)
 			{
@@ -419,8 +421,6 @@ void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] sError, 
 				);
 			}
 			
-			SQL_FetchString(hQuery, SQL_FIELD_ADVERTISEMENT_MESSAGE, g_advAdvertisements[iCurrentAdvertisement].sMessageContent, sizeof(g_advAdvertisements[].sMessageContent));
-			
 			if(g_cvPrintDebug.BoolValue)
 				LogMessage("[T_OnAdvertisementsRecive -> LOOP] Advertisement %d (Index: %d): iServerIDToAdvertise - %d, iRepeatTime - %d, iCoolDownTime - %d, sMessageContent - %s",
 				g_advAdvertisements[iCurrentAdvertisement].iAdvID,
@@ -430,7 +430,6 @@ void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] sError, 
 				g_advAdvertisements[iCurrentAdvertisement].iCoolDownTime,
 				g_advAdvertisements[iCurrentAdvertisement].sMessageContent
 				);
-			
 		}
 		
 		ClearAdvertisements(iCurrentAdvertisement);

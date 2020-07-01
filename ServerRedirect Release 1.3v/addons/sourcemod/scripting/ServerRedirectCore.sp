@@ -308,7 +308,10 @@ stock void LoadDB(bool bOnlyConnect = false)
 		LogMessage(" <-- LoadDB | bOnlyConnect = %b", bOnlyConnect);
 	
 	// Connect to the database
-	Database.Connect(T_OnDBConnected, "ServerRedirect", bOnlyConnect);
+	if(DB == null)
+		Database.Connect(T_OnDBConnected, "ServerRedirect", bOnlyConnect);
+	else
+		UpdateServerInfo();
 }
 
 // When we got a response from the db and we either connected or not.
