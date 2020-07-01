@@ -434,7 +434,7 @@ void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] sError, 
 		
 		ClearAdvertisements(iCurrentAdvertisement);
 		
-		if(!iCurrentAdvertisement)
+		if(g_cvPrintDebug.BoolValue && !iCurrentAdvertisement)
 			LogError("No Advertisements found in DB.");
 			
 		if(bStartTimer)

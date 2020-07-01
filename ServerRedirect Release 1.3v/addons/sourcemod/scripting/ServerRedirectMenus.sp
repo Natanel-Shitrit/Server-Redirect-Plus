@@ -96,10 +96,10 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 		// Clean the rest of the array so we won't show servers that got deleted in the database and still somewhere in the array we didn't touch.
 		CleanServersArray(iCurrentServer);
 		
-		if (!iCurrentServer)
+		if (g_cvPrintDebug.BoolValue && !iCurrentServer)
 			LogError("No servers found in DB.");
 		
-		if (SQL_FetchRow(hQuery))
+		if (g_cvPrintDebug.BoolValue && SQL_FetchRow(hQuery))
 			LogError("%s There is more servers in SQL-Database server than MAX_SERVERS, please recompile it with MAX_SERVERS with greater amount.", PREFIX_NO_COLOR);
 	}
 	else
