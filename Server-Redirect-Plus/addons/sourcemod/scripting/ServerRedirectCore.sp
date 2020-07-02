@@ -74,19 +74,20 @@ Advertisement g_advToEdit;								// For editing / adding the advertisements
 //=======[ ADV TYPE ENUM ]======//
 enum
 {
-	ADVERTISEMENT_LOOP		 	=  0, // USING TIMER
-	ADVERTISEMENT_MAP 		 	= -1, // USING DEFFRENCE CHECK
-	ADVERTISEMENT_PLAYERS_RANGE = -2  // USING DEFFRENCE CHECK
+	ADVERTISEMENT_PLAYERS_RANGE = -2,  	// USING DEFFRENCE CHECK
+	ADVERTISEMENT_MAP 		 		, 	// USING DEFFRENCE CHECK
+	ADVERTISEMENT_INVALID			,
+	ADVERTISEMENT_LOOP		 			// USING TIMER
 }
 
 //======[ UPDATE ADV ENUM ]=====//
 enum
 {
 	UPDATE_NOTHING 			= -1,	// Updating nothing
-	UPDATE_LOOP_TIME 		=  0,	// Updating Loop time
-	UPDATE_COOLDOWN_TIME 	=  1,	// Updating Cooldown time
-	UPDATE_PLAYER_RANGE 	=  2,	// Updating player range
-	UPDATE_ADV_MESSAGE 		=  3	// Updating message string
+	UPDATE_LOOP_TIME 			,	// Updating Loop time
+	UPDATE_COOLDOWN_TIME 		,	// Updating Cooldown time
+	UPDATE_PLAYER_RANGE 		,	// Updating player range
+	UPDATE_ADV_MESSAGE 				// Updating message string
 }
 int g_iUpdateAdvProprietary[MAXPLAYERS + 1] =  { UPDATE_NOTHING, ... };
 

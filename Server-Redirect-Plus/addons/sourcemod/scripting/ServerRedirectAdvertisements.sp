@@ -87,8 +87,12 @@ public Action Timer_Loop(Handle hTimer)
 		int iAdvertisementRepeatTime = g_advAdvertisements[iCurrentAdvertisement].iRepeatTime;
 		
 		// If this advertisement is invalid, everything after it would be the same because we are loading the all of the advertisements to the start of the array.
-		if(iAdvertisementRepeatTime <= 0)
+		if(iAdvertisementRepeatTime == ADVERTISEMENT_INVALID)
 			break;
+		
+		// If the advertisement isn't a LOOP type, continue to the next one
+		if(iAdvertisementRepeatTime < ADVERTISEMENT_LOOP)
+			continue;
 		
 		// If this is the time to post the advertisement, go for it.
 		if(g_iTimerCounter % iAdvertisementRepeatTime == 0)
@@ -163,17 +167,17 @@ stock void EditAdvertisementPropertiesMenu(int client)
 	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvServerToAdv",  g_advToEdit.iServerIDToAdvertise);
 	mAddAdvertisement.AddItem("AdvServerID", sBuffer);// 0
 	
-	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvMode", g_advToEdit.iRepeatTime >= 0 ? "LOOP" : g_advToEdit.iRepeatTime == -1 ? "MAP" : "PLAYERS");
+	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvMode", g_advToEdit.iRepeatTime >= ADVERTISEMENT_LOOP ? "LOOP" : g_advToEdit.iRepeatTime == ADVERTISEMENT_MAP ? "MAP" : "PLAYERS");
 	mAddAdvertisement.AddItem("AdvMode", sBuffer);// 1
 	
 	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvLoopTime", g_advToEdit.iRepeatTime);
-	mAddAdvertisement.AddItem("AdvLoopTime", sBuffer, g_advToEdit.iRepeatTime >= 0 ? ITEMDRAW_DEFAULT : ITEMDRAW_IGNORE); // 2
+	mAddAdvertisement.AddItem("AdvLoopTime", sBuffer, g_advToEdit.iRepeatTime >= ADVERTISEMENT_LOOP ? ITEMDRAW_DEFAULT : ITEMDRAW_IGNORE); // 2
 	
 	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvCooldownTime", g_advToEdit.iCoolDownTime);
-	mAddAdvertisement.AddItem("AdvLoopTime", sBuffer, g_advToEdit.iRepeatTime < 0 ? ITEMDRAW_DEFAULT : ITEMDRAW_IGNORE); // 3
+	mAddAdvertisement.AddItem("AdvLoopTime", sBuffer, g_advToEdit.iRepeatTime < ADVERTISEMENT_LOOP ? ITEMDRAW_DEFAULT : ITEMDRAW_IGNORE); // 3
 	
 	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvPlayerRange", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
-	mAddAdvertisement.AddItem("AdvPlayerRange", sBuffer, g_advToEdit.iRepeatTime == -2 ? ITEMDRAW_DEFAULT : ITEMDRAW_IGNORE); // 4
+	mAddAdvertisement.AddItem("AdvPlayerRange", sBuffer, g_advToEdit.iRepeatTime == ADVERTISEMENT_PLAYERS_RANGE ? ITEMDRAW_DEFAULT : ITEMDRAW_IGNORE); // 4
 	
 	char sAdvMessage[32];
 	CopyStringWithDots(sAdvMessage, sizeof(sAdvMessage), g_advToEdit.sMessageContent, sizeof(g_advToEdit.sMessageContent));
@@ -219,7 +223,7 @@ public int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction act
 				}
 				case 1:
 				{
-					g_advToEdit.iRepeatTime = g_advToEdit.iRepeatTime >= 0 ? -1 : g_advToEdit.iRepeatTime == -1 ? -2 : 0;
+					g_advToEdit.iRepeatTime = (g_advToEdit.iRepeatTime >= ADVERTISEMENT_LOOP && g_advToEdit.iRepeatTime != ADVERTISEMENT_INVALID) ? ADVERTISEMENT_MAP : g_advToEdit.iRepeatTime == ADVERTISEMENT_MAP ? ADVERTISEMENT_PLAYERS_RANGE : ADVERTISEMENT_LOOP;
 					EditAdvertisementPropertiesMenu(client);
 				}
 				case 2:
