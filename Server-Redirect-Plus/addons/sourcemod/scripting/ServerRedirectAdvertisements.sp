@@ -9,6 +9,11 @@ enum
 	SQL_FIELD_ADVERTISEMENT_MESSAGE
 }
 
+#define TRANSLATION_NAME_LOOP_TIME		"LoopTimeTranslation"
+#define TRANSLATION_NAME_COOLDOWN_TIME	"CooldownTimeTranslation"
+#define TRANSLATION_NAME_PLAYER_RANGE	"PlayerRangeTranslation"
+#define TRANSLATION_NAME_ADV_MESSAGE	"AdvMessageTranslation"
+
 public Plugin myinfo = 
 {
 	name = "[Server-List] Advertisements", 
@@ -21,50 +26,88 @@ public Plugin myinfo =
 //====================[ EVENTS ]=====================//
 public Action OnClientSayCommand(int client, const char[] command, const char[] args)
 {
-	// Client is editing something?
 	if(g_iUpdateAdvProprietary[client] != UPDATE_NOTHING)
 	{
-		// Yes, but the client wants to exit edit mode without editing.
 		if(!StrEqual(args, "-1"))
 		{
+			char sOldValue[16], sNewValue[16], sTranslationName[64];
+			
+			int iTime;
+			if(UPDATE_LOOP_TIME <= g_iUpdateAdvProprietary[client] <= UPDATE_COOLDOWN_TIME)
+			{
+				iTime = StringToInt(args);
+				
+				if(iTime < 0)
+				{
+					CPrintToChat(client, "%t", "AdvertisementErrorInvalidValue", PREFIX, iTime);
+					return Plugin_Handled;
+				}
+				
+				// New Value of UPDATE_LOOP_TIME and UPDATE_COOLDOWN_TIME
+				IntToString(iTime, sNewValue, sizeof(sNewValue));
+			}
+			
 			switch(g_iUpdateAdvProprietary[client])
 			{
 				case UPDATE_LOOP_TIME:
 				{
-					int iTime = StringToInt(args);
+					sTranslationName = TRANSLATION_NAME_LOOP_TIME;
 					
-					if(iTime > 0)
-						g_advToEdit.iRepeatTime = iTime;
+					// Old value of UPDATE_LOOP_TIME
+					IntToString(g_advToEdit.iRepeatTime, sOldValue, sizeof(sOldValue));
+					g_advToEdit.iRepeatTime = iTime;
 				}
 				case UPDATE_COOLDOWN_TIME:
 				{
-					int iTime = StringToInt(args);
+					sTranslationName = TRANSLATION_NAME_COOLDOWN_TIME;
 					
-					if(iTime > 0)
-						g_advToEdit.iCoolDownTime = iTime;
+					// Old value of UPDATE_COOLDOWN_TIME
+					IntToString(g_advToEdit.iCoolDownTime, sOldValue, sizeof(sOldValue));
+					g_advToEdit.iCoolDownTime = iTime;
 				}
-					
 				case UPDATE_PLAYER_RANGE:
 				{
 					if(StrContains(args, "|") == -1 || strlen(args) > 6)
 					{
-						PrintToChat(client, "%s \x02Invalid\x01 string for \x04Player-Range\x01.", PREFIX);
-						PrintToChat(client, "%s \x04Valid\x01 string template: \x02{min}|{max}\x01", PREFIX);
-						PrintToChat(client, "%s \x04Example\x01:\x02 10|15 \x01(10 is \x04min\x01, 15 is \x02max\x01)", PREFIX);
+						CPrintToChat(client, "%t", "AdvertisementErrorInvalidPlayerRange", PREFIX);
+						CPrintToChat(client, "%t", "PlayerRangeStringExampleRow1"		 , PREFIX);
+						CPrintToChat(client, "%t", "PlayerRangeStringExampleRow2"		 , PREFIX);
 						return Plugin_Handled;
 					}
-					g_advToEdit.iPlayersRange = GetPlayerRangeFromString(args, g_srOtherServers[GetServerIndexByServerID(g_advToEdit.iServerIDToAdvertise)].iMaxPlayers);
-					PrintToChat(client, "%s \x04Successfully\x01 updated \x04Player-Range\x01", PREFIX);
+					
+					sTranslationName = TRANSLATION_NAME_PLAYER_RANGE;
+					
+					int iServerIDToAdvertise = GetServerIndexByServerID(g_advToEdit.iServerIDToAdvertise);
+					
+					// Old value of UPDATE_PLAYER_RANGE
+					Format(sOldValue, sizeof(sOldValue), "%d|%d", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
+					
+					g_advToEdit.iPlayersRange = GetPlayerRangeFromString(args, (iServerIDToAdvertise >= 0 ? g_srOtherServers[iServerIDToAdvertise].iMaxPlayers : MaxClients));
+					
+					// New value of UPDATE_PLAYER_RANGE
+					Format(sNewValue, sizeof(sNewValue), "%d|%d", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
 				}
 				case UPDATE_ADV_MESSAGE:
 				{
+					sTranslationName = TRANSLATION_NAME_ADV_MESSAGE;
+					
+					// Old value of UPDATE_PLAYER_RANGE
+					CopyStringWithDots(sOldValue, sizeof(sOldValue), g_advToEdit.sMessageContent, sizeof(g_advToEdit.sMessageContent));
+					
 					if(String_StartsWith(args, "<ADD>"))
 						StrCat(g_advToEdit.sMessageContent, sizeof(g_advToEdit.sMessageContent), args[5]);
 					else
 						strcopy(g_advToEdit.sMessageContent, sizeof(g_advToEdit.sMessageContent), args);
+					
+					// New value of UPDATE_PLAYER_RANGE
+					CopyStringWithDots(sNewValue, sizeof(sNewValue), g_advToEdit.sMessageContent, sizeof(g_advToEdit.sMessageContent));
 				}
 			}
+			
+			CPrintToChat(client, "%t", "UpdatedSuccessfullyTemplate", PREFIX, sTranslationName, sOldValue, sNewValue);
 		}
+		else
+			CPrintToChat(client, "%t", "ExitEditMode", PREFIX);
 		
 		g_iUpdateAdvProprietary[client] = UPDATE_NOTHING;
 		EditAdvertisementPropertiesMenu(client);
@@ -159,6 +202,9 @@ stock void EditAdvertisementPropertiesMenu(int client)
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- EditAdvertisementPropertiesMenu");
 	
+	if (g_advToEdit.iRepeatTime == ADVERTISEMENT_INVALID)
+		g_advToEdit.iRepeatTime = ADVERTISEMENT_LOOP;
+	
 	char sBuffer[128];
 	
 	Menu mAddAdvertisement = new Menu(AddAdvertisementMenuHandler);
@@ -198,7 +244,6 @@ stock void EditAdvertisementPropertiesMenu(int client)
 	mAddAdvertisement.Display(client, MENU_TIME_FOREVER);
 	
 }
-
 
 public int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction action, int client, int Clicked)
 {
@@ -244,9 +289,18 @@ public int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction act
 				}
 				case 6:
 				{
-					iAdvID == -1 ? AddAdvertisementToDB() : UpdateAdvertisementDB(iAdvID);		// Add / Edit adv
+					int iErrorID;
 					
-					ResetAdvToEdit();
+					if(!(iErrorID = IsValidAdvertisement(g_advToEdit)))
+					{
+						iAdvID == -1 ? AddAdvertisementToDB() : UpdateAdvertisementDB(iAdvID);		// Add / Edit adv
+						ResetAdvToEdit();
+					}
+					else
+					{
+						PrintAdvertisementErrorMessage(client, iErrorID);
+						EditAdvertisementPropertiesMenu(client);
+					}
 				}
 				case 7:
 				{
@@ -272,7 +326,6 @@ public int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction act
 			delete AddAdvertisementMenu;
 	}
 }
-
 
 public int SelectServerToAdvMenuHandler(Menu SelectServerToAdv, MenuAction action, int client, int Clicked)
 {
@@ -660,15 +713,82 @@ stock int FindAdvertisement(int iServer, int iAdvertisementMode)
 			g_advAdvertisements[iCurrentAdvertisement].iRepeatTime == iAdvertisementMode)
 			return iCurrentAdvertisement;
 			
-			
 	return -1;
 }
 
 // Returning the server index given the server ID
 stock int GetServerIndexByServerID(int iServerID)
 {
+	if (iServerID == 0) return -1;
+	
 	for (int iCurrentServer = 0; iCurrentServer < MAX_SERVERS; iCurrentServer++)
 		if(g_srOtherServers[iCurrentServer].iServerID == iServerID)
 			return iCurrentServer;
 	return -1;
 }
+
+// Returns 0 if the Advertisement is valid (otherwise the Error-ID)
+int IsValidAdvertisement(Advertisement advToCheck)
+{
+	int iErrors, iServerIDToAdvertise = GetServerIndexByServerID(advToCheck.iServerIDToAdvertise);
+	
+	// if the the server the player wants to advertise is invalid.
+	if(iServerIDToAdvertise == -1)
+		iErrors |= (1 << ERROR_INVALID_SERVER_ID);
+	
+	// If the Advertisement message is empty.
+	if(StrEqual(advToCheck.sMessageContent, "", false))
+		iErrors |= (1 << ERROR_EMPTY_MESSAGE_CONTENT);
+	
+	if (advToCheck.iRepeatTime == ADVERTISEMENT_PLAYERS_RANGE || advToCheck.iRepeatTime == ADVERTISEMENT_MAP)
+	{
+		if(advToCheck.iRepeatTime == ADVERTISEMENT_PLAYERS_RANGE)
+		{
+			if(!(0 < advToCheck.iPlayersRange[0] < (iServerIDToAdvertise >= 0 ? g_srOtherServers[iServerIDToAdvertise].iMaxPlayers : MaxClients)))
+				iErrors |= (1 << ERROR_INVALID_PLAYER_RANGE_START);
+			
+			if(!(0 < advToCheck.iPlayersRange[1] < (iServerIDToAdvertise >= 0 ? g_srOtherServers[iServerIDToAdvertise].iMaxPlayers : MaxClients)))
+				iErrors |= (1 << ERROR_INVALID_PLAYER_RANGE_END);
+				
+			if(!(iErrors & (3 << ERROR_INVALID_PLAYER_RANGE_START)) && advToCheck.iPlayersRange[0] > advToCheck.iPlayersRange[1])
+				iErrors |= (1 << ERROR_INVALID_PLAYER_RANGE);
+		}
+	}
+	
+	return iErrors;
+}
+
+void PrintAdvertisementErrorMessage(int client, int iError)
+{
+	char sTranslationString[64];
+	
+	CPrintToChat(client, "%t", "AdvertisementErrorHeader", PREFIX);
+	
+	for (int iCurrentError = ERROR_INVALID_SERVER_ID; iCurrentError <= ERROR_INVALID_PLAYER_RANGE_END; iCurrentError++)
+	{
+		if(iError & (1 << iCurrentError))
+		{
+			Format(sTranslationString, sizeof(sTranslationString), "AdvertisementError%d", iCurrentError);
+			CPrintToChat(client, "• %t", sTranslationString);
+		}
+	}
+}
+
+/*
+	ERROR_INVALID_SERVER_ID,
+	ERROR_INVALID_LOOP_TIME,
+	ERROR_INVALID_COOLDOWN_TIME,
+	ERROR_INVALID_PLAYER_RANGE,
+	ERROR_EMPTY_MESSAGE_CONTENT
+
+	int iAdvID;					// Advertisement ID
+	int iRepeatTime;			// How long to wait between each advertise
+	int iCoolDownTime;			// How long should this advertisement should be on cooldown (for 'deffrence check' advertisements)
+	int iAdvertisedTime;		// Used for calculating if the advertisement should post
+	int iPlayersRange[2]; 		// 0 - MIN | 1 - MAX
+	int iServerIDToAdvertise;	// Advertised Server
+	
+	char sMessageContent[512];	// Message to print
+	
+	bool bActive;				// If the advertisement is currently active
+*/

@@ -80,6 +80,20 @@ enum
 	ADVERTISEMENT_LOOP		 			// USING TIMER
 }
 
+//======[ ADV ERROR ENUM ]======//
+enum
+{
+	// LOOP START
+	ERROR_INVALID_SERVER_ID = 1	,
+	ERROR_EMPTY_MESSAGE_CONTENT	,
+	ERROR_INVALID_PLAYER_RANGE	,
+	ERROR_INVALID_PLAYER_RANGE_START,
+	ERROR_INVALID_PLAYER_RANGE_END	,
+	// LOOP END
+	ERROR_INVALID_LOOP_TIME,
+	ERROR_INVALID_COOLDOWN_TIME
+}
+
 //======[ UPDATE ADV ENUM ]=====//
 enum
 {
@@ -552,11 +566,11 @@ stock void LoadSettings()
 		SetFailState("%s Couldn't load plugin config.", PREFIX_NO_COLOR);
 	
 	// Get the ServerID
-	g_srCurrentServer.iServerID = kvSettings.GetNum("ServerID", -1);
+	g_srCurrentServer.iServerID = kvSettings.GetNum("ServerID", 0);
 	
 	// If the ServerID is invalid don't continue.
-	if(g_srCurrentServer.iServerID < 0)
-		SetFailState("%s Invalid Server-ID, please change / add a vaild value (0 or Higher) on 'ServerID' in the plugin config.", PREFIX_NO_COLOR);
+	if(g_srCurrentServer.iServerID < 1)
+		SetFailState("%s Invalid Server-ID, please change / add a vaild value (1 or Higher) on 'ServerID' in the plugin config.", PREFIX_NO_COLOR);
 	
 	// Get the rest of the settings if everything is ok
 	g_srCurrentServer.bIncludeBots 		= view_as<bool>(kvSettings.GetNum("ShowBots"				, 0));
