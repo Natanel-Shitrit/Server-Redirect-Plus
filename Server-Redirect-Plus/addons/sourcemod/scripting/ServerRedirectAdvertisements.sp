@@ -657,7 +657,9 @@ stock void ResetAdvToEdit()
 		LogMessage(" <-- ResetAdvToEdit");
 	
 	Advertisement adv;
+	
 	g_advToEdit = adv;
+	g_advToEdit.iAdvID = -1;
 }
 
 // Clearing the advertisement array from a given position to the end.
