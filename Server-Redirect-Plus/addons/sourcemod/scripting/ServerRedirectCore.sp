@@ -486,7 +486,7 @@ void T_OnTimeoutResultReceived(Handle owner, Handle hQuery, const char[] sError,
 					iServerID,
 					SQL_FetchInt(hQuery, 0),
 					SQL_FetchInt(hQuery, 1),
-					GetTime() - SQL_FetchInt(hQuery, 0)
+					iTimeWithoutUpdate
 					);
 				
 				Format(Query, sizeof(Query), "DELETE FROM `server_redirect_servers` WHERE `server_id` = %d", iServerID);
@@ -570,9 +570,16 @@ stock void LoadSettings()
 	
 	// If the ServerID is invalid don't continue.
 	if(g_srCurrentServer.iServerID < 1)
-		SetFailState("%s Invalid Server-ID, please change / add a vaild value (1 or Higher) on 'ServerID' in the plugin config.", PREFIX_NO_COLOR);
+	{
+		char sServerSteamID[64];
+		GetServerAuthId(AuthId_Steam3, sServerSteamID, sizeof(sServerSteamID));
+		sServerSteamID[strlen(sServerSteamID) - 2] = '\0';
+		
+		g_srCurrentServer.iServerID = StringToInt(sServerSteamID[5]);
+	}
 	
 	// Get the rest of the settings if everything is ok
+	
 	g_srCurrentServer.bIncludeBots 		= view_as<bool>(kvSettings.GetNum("ShowBots"				, 0));
 	g_srCurrentServer.bShowInServerList = view_as<bool>(kvSettings.GetNum("ShowSeverInServerList"	, 1));
 	
@@ -588,7 +595,7 @@ stock void LoadSettings()
 	kvSettings.GetString("ServerCategory"		, g_srCurrentServer.sServerCategory	, sizeof(g_srCurrentServer.sServerCategory)	);
 	
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage("Settings Loaded:\n • MenuFormat: %s\n • ServerListCommands: %s\n • ServerName: %s\n • ServerCategory: %s\n • ShowBots: %d\n • ShowSeverInServerList: %d",
+		LogMessage("Settings Loaded:\nMenuFormat: %s\nServerListCommands: %s\nServerName: %s\nServerCategory: %s\nShowBots: %d\nShowSeverInServerList: %d",
 		g_sMenuFormat,
 		g_sServerListCommands,
 		g_srCurrentServer.sServerName,
@@ -810,8 +817,9 @@ stock bool String_EndsWith(const char[] str, const char[] subString)
 /* TODO:
 * This Release:
 * 1. [✓] Add an option to delete a sever from the database. (insted add a "time-out" so servers that didn't got updated in x min will get deleted) 
-* 2. [✗] Add an option to show / hide certian servers.
 * 3. [✓] Add reserve slot support for the player-count. FIX?[✓]
+* 2. [✗] Add an option to show / hide certian servers.
+* 4. [✗] Multi-Select for advertisements
 *
 * Later Releases:
 * 1. [✗] Make the plugin more dynamic and use arraylist so i wont have to use fixed arrays
