@@ -775,22 +775,3 @@ void PrintAdvertisementErrorMessage(int client, int iError)
 		}
 	}
 }
-
-/*
-	ERROR_INVALID_SERVER_ID,
-	ERROR_INVALID_LOOP_TIME,
-	ERROR_INVALID_COOLDOWN_TIME,
-	ERROR_INVALID_PLAYER_RANGE,
-	ERROR_EMPTY_MESSAGE_CONTENT
-
-	int iAdvID;					// Advertisement ID
-	int iRepeatTime;			// How long to wait between each advertise
-	int iCoolDownTime;			// How long should this advertisement should be on cooldown (for 'deffrence check' advertisements)
-	int iAdvertisedTime;		// Used for calculating if the advertisement should post
-	int iPlayersRange[2]; 		// 0 - MIN | 1 - MAX
-	int iServerIDToAdvertise;	// Advertised Server
-	
-	char sMessageContent[512];	// Message to print
-	
-	bool bActive;				// If the advertisement is currently active
-*/

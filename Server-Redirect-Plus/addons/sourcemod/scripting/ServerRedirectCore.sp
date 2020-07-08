@@ -38,8 +38,8 @@ ConVar 	g_cvUpdateOtherServersInterval; 		// Timer Interval for other servers up
 ConVar 	g_cvUpdateServerInterval; 				// Time between each update
 ConVar 	g_cvPrintDebug; 						// Debug Mode Status
 
-ConVar 	g_cvReservedSlots;
-ConVar 	g_cvHiddenSlots;
+ConVar 	g_cvReservedSlots;						// Number of reserved slots.
+ConVar 	g_cvHiddenSlots;						// If the reserved slots are hidden or not.
 
 bool 	g_bShowServerOnServerList; 				// Show this server in the Server-List?
 bool 	g_bEnableAdvertisements; 				// Should we advertise servers?
@@ -568,18 +568,18 @@ stock void LoadSettings()
 	// Get the ServerID
 	g_srCurrentServer.iServerID = kvSettings.GetNum("ServerID", 0);
 	
-	// If the ServerID is invalid don't continue.
+	// If the ServerID is invalid, Get the server Steam-ID.
 	if(g_srCurrentServer.iServerID < 1)
 	{
-		char sServerSteamID[64];
-		GetServerAuthId(AuthId_Steam3, sServerSteamID, sizeof(sServerSteamID));
-		sServerSteamID[strlen(sServerSteamID) - 2] = '\0';
+		// This is not the best way but 
+		g_srCurrentServer.iServerID = GetServerSteamAccountId();
 		
-		g_srCurrentServer.iServerID = StringToInt(sServerSteamID[5]);
+		// If we don't have the server steam account id and we didn't got a ServerID ask for a manual configuration.
+		if(g_srCurrentServer.iServerID == 0)
+			SetFailState("Couldn't get the Server Steam Account ID, Please manually configure ServerID in the plugin config");
 	}
 	
 	// Get the rest of the settings if everything is ok
-	
 	g_srCurrentServer.bIncludeBots 		= view_as<bool>(kvSettings.GetNum("ShowBots"				, 0));
 	g_srCurrentServer.bShowInServerList = view_as<bool>(kvSettings.GetNum("ShowSeverInServerList"	, 1));
 	
@@ -816,8 +816,8 @@ stock bool String_EndsWith(const char[] str, const char[] subString)
 
 /* TODO:
 * This Release:
-* 1. [✓] Add an option to delete a sever from the database. (insted add a "time-out" so servers that didn't got updated in x min will get deleted) 
-* 3. [✓] Add reserve slot support for the player-count. FIX?[✓]
+* 1. [✓] Add an option to delete a sever from the database. (insted added a "time-out" so servers that didn't got updated in x min will get deleted) 
+* 3. [✓] Add reserve slot support for the player-count.
 * 2. [✗] Add an option to show / hide certian servers.
 * 4. [✗] Multi-Select for advertisements
 *
@@ -825,10 +825,10 @@ stock bool String_EndsWith(const char[] str, const char[] subString)
 * 1. [✗] Make the plugin more dynamic and use arraylist so i wont have to use fixed arrays
 * 2. [✗] Party mod :P
 *
-* • FINALLY FUCKING PUBLISH IT TO THE PUBLIC VERSION (hope i will remember deleting this before publishing; i wrote this in 2AM)
+* 
 */
 
-/* What was added?
+/* What was added? [Version 2.3.0 Changelog]
 * 1. Advertisements! (formatable messages, Map-Change message, Player-Range message, do / don't Advertise offline servers)
 * 2. Auto Time-Out server deletion.
 * 3. Config instead of the old ConVars

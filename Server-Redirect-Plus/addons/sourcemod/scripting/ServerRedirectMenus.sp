@@ -419,22 +419,21 @@ stock void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, i
 	// for each property, the number of characters in use will be subtracted from the variable that stores the number of characters left.
 	
 	// SERVER ID (DB ID) - SIZE 2
-	iFormatSizeLeft -= 2 * ReplaceStringWithInt(sToFormat, iStringSize, "{id}", g_srOtherServers[iServerIndex].iServerID, false);
+	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{id}", g_srOtherServers[iServerIndex].iServerID, false);
 	
 	// SERVER PORT - SIZE 5
-	iFormatSizeLeft -= 5 * ReplaceStringWithInt(sToFormat, iStringSize, "{port}", g_srOtherServers[iServerIndex].iServerPort, false);
+	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{port}", g_srOtherServers[iServerIndex].iServerPort, false);
 	
 	// CURRENT SERVER PLAYERS - SIZE 2
-	iFormatSizeLeft -= 2 * ReplaceStringWithInt(sToFormat, iStringSize, "{current}", g_srOtherServers[iServerIndex].iNumOfPlayers, false);
+	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{current}", g_srOtherServers[iServerIndex].iNumOfPlayers, false);
 	
 	// MAX SERVER PLAYERS - SIZE 2
-	iFormatSizeLeft -= 2 * ReplaceStringWithInt(sToFormat, iStringSize, "{max}", g_srOtherServers[iServerIndex].iMaxPlayers - ((!g_srOtherServers[iServerIndex].bHiddenSlots || CanClientUseReservedSlots(client, iServerIndex)) ? 0 : g_srOtherServers[iServerIndex].iReservedSlots), false);
+	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{max}", g_srOtherServers[iServerIndex].iMaxPlayers - ((!g_srOtherServers[iServerIndex].bHiddenSlots || CanClientUseReservedSlots(client, iServerIndex)) ? 0 : g_srOtherServers[iServerIndex].iReservedSlots), false);
 	
 	// SERVER IP - SIZE 16
 	char sServerIPv4[4][4], sFullIPv4[17];
 	GetIPv4FromIP32(g_srOtherServers[iServerIndex].iServerIP32, sServerIPv4);
 	ImplodeStrings(sServerIPv4, 4, ".", sFullIPv4, sizeof(sFullIPv4));
-	//Format(sFullIPv4, sizeof(sFullIPv4), "%s.%s.%s.%s", sFullIPv4[0], sFullIPv4[1], sFullIPv4[2], sFullIPv4[3]);
 	iFormatSizeLeft -= 16 * ReplaceString(sToFormat, iStringSize, "{ip}", sFullIPv4, false);
 	
 	// SERVER STATUS - SIZE 7
@@ -495,9 +494,8 @@ stock void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, i
 stock int ReplaceStringWithInt(char[] sDest, int iDestSize, char[] sToReplace, int iValueToReplaceWith, bool bCaseSensitive = true)
 {
 	char sIntToString[64];
-	IntToString(iValueToReplaceWith, sIntToString, sizeof(sIntToString));
 	
-	return ReplaceString(sDest, iDestSize, sToReplace, sIntToString, bCaseSensitive);
+	return IntToString(iValueToReplaceWith, sIntToString, sizeof(sIntToString)) * ReplaceString(sDest, iDestSize, sToReplace, sIntToString, bCaseSensitive);
 }
 
 // Load Categories into a menu
