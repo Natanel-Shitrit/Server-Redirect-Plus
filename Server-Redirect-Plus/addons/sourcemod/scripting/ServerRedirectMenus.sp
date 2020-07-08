@@ -481,12 +481,12 @@ stock void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, i
 		iNumOfFreeCharacters += iClaculateBuffer;
 		
 		// SERVER SHORT NAME - MAX SIZE <= FULL NAME
-		iClaculateBuffer = CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty + iNumOfFreeCharacters, sShortServerName, sizeof(g_srOtherServers[].sServerName));
+		iClaculateBuffer = CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty + (iNumOfFreeCharacters > 0 ? iNumOfFreeCharacters : 0), sShortServerName, sizeof(g_srOtherServers[].sServerName));
 		iClaculateBuffer *= ReplaceString(sToFormat, iStringSize, "{shortname}", sReplaceBuffer, false);
 		iNumOfFreeCharacters += iClaculateBuffer;
 		
 		// SERVER FULL NAME - MAX SIZE 245
-		CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty + iNumOfFreeCharacters, g_srOtherServers[iServerIndex].sServerName, sizeof(g_srOtherServers[].sServerName));
+		CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty + (iNumOfFreeCharacters > 0 ? iNumOfFreeCharacters : 0), g_srOtherServers[iServerIndex].sServerName, sizeof(g_srOtherServers[].sServerName));
 		ReplaceString(sToFormat, iStringSize, "{longname}", sReplaceBuffer, false);
 	}
 }
