@@ -13,7 +13,7 @@
 	"NumberOfPlayersMenu"
 	{
 		// 1 - Number Of Players, 2 - Max Players, 3 - Server Full Prefix //
-		"#format"	"{1:d},{2:d},{3:s}"
+		"#format"	"{1:d},{2:d},{3:t}"
 		"en"		"Number of players: {1} / {2} {3}"
 		"chi"		"玩家数量: {1} / {2} {3}"
 		"cze"		"Počet hráčů: {1} / {2} {3}"
@@ -117,6 +117,12 @@
 		"cze"		"{1} (SKRYTÝ)"
 	}
 	
+	"ServerReservedSlots"
+	{
+		// 1 - Number of reserved slots
+		"#format"	"{1:d}"
+		"en"		"({1} Reserved Slots)"
+	}
 	
 	// Command_ServerList //
 	"MenuTitleMain"
@@ -363,6 +369,11 @@
 	"AdvMessageTranslation"
 	{
 		"en"		"Advertisement-Message"
+	}
+	
+	"EmptyText"
+	{
+		"en"		""
 	}
 	
 	//{default}", "{darkred}", "{green}", "{lightgreen}", "{red}", "{blue}", "{olive}", "{lime}",

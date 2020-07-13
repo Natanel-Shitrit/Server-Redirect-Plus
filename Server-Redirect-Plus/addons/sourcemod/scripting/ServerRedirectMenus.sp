@@ -76,7 +76,8 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 			}
 			
 			// Check if the server is timed out (this will remove the server from the array)
-			CheckIfServerTimedOut(g_srOtherServers[iCurrentServer].iServerID);
+			if(SQL_FetchInt(hQuery, SQL_FIELD_SERVER_TIMEOUT) > 0)
+				CheckIfServerTimedOut(g_srOtherServers[iCurrentServer].iServerID);
 			
 			if (g_cvPrintDebug.BoolValue)
 				LogMessage("[T_OnServersReceive -> LOOP(%d) -> IF] Server-ID %d (Status: %b | Show: %b): \nName: %s, Category: %s, Map: %s, IP32: %d, Port: %d, Number of players: %d, Max players: %d",
@@ -176,15 +177,20 @@ public int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, i
 				Menu mServerInfo = new Menu(ServerInfoMenuHandler);
 				mServerInfo.SetTitle("%s [%s.%s.%s.%s:%d]\n ", g_srOtherServers[iServer].sServerName, ServerIP[0], ServerIP[1], ServerIP[2], ServerIP[3], g_srOtherServers[iServer].iServerPort);
 				
-				int iMaxPlayerWithReserved = g_srOtherServers[iServer].iMaxPlayers - ((!g_srOtherServers[iServer].bHiddenSlots || CanClientUseReservedSlots(client, iServer)) ? 0 : g_srOtherServers[iServer].iReservedSlots);
+				bool bCanUseReservedSlots = CanClientUseReservedSlots(client, iServer);
+				int iMaxPlayerWithReserved = g_srOtherServers[iServer].iMaxPlayers - ((!g_srOtherServers[iServer].bHiddenSlots || bCanUseReservedSlots) ? 0 : g_srOtherServers[iServer].iReservedSlots);
 				
 				// Is the server full?
 				bool bIsServerFull = g_srOtherServers[iServer].iNumOfPlayers >= iMaxPlayerWithReserved;
 				
-				char sEditBuffer[64];
+				char sEditBuffer[128];
 				
 				// Add 'Number of player'.
-				Format(sEditBuffer, sizeof(sEditBuffer), "%t", "NumberOfPlayersMenu", g_srOtherServers[iServer].iNumOfPlayers, iMaxPlayerWithReserved, bIsServerFull ? "[FULL]" : "");
+				Format(sEditBuffer, sizeof(sEditBuffer), "%t", "NumberOfPlayersMenu", g_srOtherServers[iServer].iNumOfPlayers, iMaxPlayerWithReserved, bIsServerFull ? "ServerFullMenu" : "EmptyText");
+				
+				if(g_srOtherServers[iServer].iReservedSlots && (!g_srOtherServers[iServer].bHiddenSlots || bCanUseReservedSlots))
+					Format(sEditBuffer, sizeof(sEditBuffer), "%s %t", sEditBuffer, "ServerReservedSlots", g_srOtherServers[iServer].iReservedSlots);
+					
 				mServerInfo.AddItem("", sEditBuffer, ITEMDRAW_DISABLED);
 				
 				// Add 'Map'.
@@ -418,16 +424,16 @@ stock void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, i
 	
 	// for each property, the number of characters in use will be subtracted from the variable that stores the number of characters left.
 	
-	// SERVER ID (DB ID) - SIZE 2
+	// SERVER ID (DB ID)
 	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{id}", g_srOtherServers[iServerIndex].iServerID, false);
 	
-	// SERVER PORT - SIZE 5
+	// SERVER PORT
 	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{port}", g_srOtherServers[iServerIndex].iServerPort, false);
 	
-	// CURRENT SERVER PLAYERS - SIZE 2
+	// CURRENT SERVER PLAYERS
 	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{current}", g_srOtherServers[iServerIndex].iNumOfPlayers, false);
 	
-	// MAX SERVER PLAYERS - SIZE 2
+	// MAX SERVER PLAYERS 
 	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{max}", g_srOtherServers[iServerIndex].iMaxPlayers - ((!g_srOtherServers[iServerIndex].bHiddenSlots || CanClientUseReservedSlots(client, iServerIndex)) ? 0 : g_srOtherServers[iServerIndex].iReservedSlots), false);
 	
 	// SERVER IP - SIZE 16
@@ -525,8 +531,9 @@ stock int LoadMenuCategories(Menu mMenu, int client)
 stock bool CategoryAlreadyExist(int iServer)
 {
 	for (int iCurrentServer = 0; iCurrentServer < iServer; iCurrentServer++)
-	if (StrEqual(g_srOtherServers[iCurrentServer].sServerCategory, g_srOtherServers[iServer].sServerCategory, false))
-		return true;
+		if (StrEqual(g_srOtherServers[iCurrentServer].sServerCategory, g_srOtherServers[iServer].sServerCategory, false))
+			return true;
+	
 	return false;
 }
 

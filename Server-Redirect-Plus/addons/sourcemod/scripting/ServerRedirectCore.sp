@@ -38,6 +38,7 @@ ConVar 	g_cvUpdateOtherServersInterval; 		// Timer Interval for other servers up
 ConVar 	g_cvUpdateServerInterval; 				// Time between each update
 ConVar 	g_cvPrintDebug; 						// Debug Mode Status
 
+ConVar 	g_cvNetPublicAdr;						// Public IP Adress, could be set manually from srdc launch options
 ConVar 	g_cvReservedSlots;						// Number of reserved slots.
 ConVar 	g_cvHiddenSlots;						// If the reserved slots are hidden or not.
 
@@ -171,6 +172,7 @@ public void OnPluginStart()
 	g_cvUpdateServerInterval 		= CreateConVar("server_redirect_server_update_interval"			, "20.0", "The number of seconds the plugin will wait before updating player count in the SQL server." 	, _, true, 0.0, true, 600.0	);
 	g_cvPrintDebug 					= CreateConVar("server_redirect_debug_mode"						, "0"	, "Whether or not to print debug messages in server console"									, _, true, 0.0, true, 1.0	);
 	
+	g_cvNetPublicAdr  = FindConVar("net_public_adr"		);
 	g_cvReservedSlots = FindConVar("sm_reserved_slots"	);
 	g_cvHiddenSlots	  = FindConVar("sm_hide_slots"		);
 	
@@ -693,11 +695,23 @@ stock int CopyStringWithDots(char[] sDest, int iDestLen, char[] sSource, int iSo
 stock int GetServerIP32()
 {
 	// Gets the server public IP
-	int sIPFull[4];
-	SteamWorks_GetPublicIP(sIPFull);
+	int iIPFull[4];
+	SteamWorks_GetPublicIP(iIPFull);
+	
+	if(!iIPFull)
+	{
+		char sIPv4[17];
+		GetConVarString(g_cvNetPublicAdr, sIPv4, sizeof(sIPv4));
+		
+		char sIPFull[4][4];
+		ExplodeString(sIPv4, ".", sIPFull, 4, 4);
+		
+		for (int iCurrentField = 0; iCurrentField < 4; iCurrentField++)
+			iIPFull[iCurrentField] = StringToInt(sIPFull[iCurrentField]);
+	}
 	
 	// Save the IP32
-	int iFullIP32 = sIPFull[0] << 24 | sIPFull[1] << 16 | sIPFull[2] << 8 | sIPFull[3];
+	int iFullIP32 = iIPFull[0] << 24 | iIPFull[1] << 16 | iIPFull[2] << 8 | iIPFull[3];
 	
 	// If the IP32 is 0 we need to get it in another way. If it's still 0 just return it :/
 	return iFullIP32 == 0 ? FindConVar("hostip").IntValue : iFullIP32;
