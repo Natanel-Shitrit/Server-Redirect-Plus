@@ -348,7 +348,7 @@ public void T_OnDBConnected(Database dbMain, const char[] sError, any bOnlyConne
 		if(bOnlyConnect)
 			return;
 		
-		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS server_redirect_servers (`id` INT NOT NULL AUTO_INCREMENT, `server_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_category` VARCHAR(64) NOT NULL, `server_ip` INT NOT NULL DEFAULT '-1', `server_port` INT NOT NULL DEFAULT '0', `server_status` INT NOT NULL DEFAULT '0', `server_visible` INT NOT NULL DEFAULT '1', `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL DEFAULT '0', `reserved_slots` INT NOT NULL DEFAULT '0', `hidden_slots` INT(1) NOT NULL DEFAULT '0', `max_players` INT NOT NULL DEFAULT '0', `bots_included` INT NOT NULL DEFAULT '0', `unix_lastupdate` TIMESTAMP NOT NULL, `timeout_time` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), UNIQUE(`server_id`))", _, DBPrio_High);
+		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS server_redirect_servers (`id` INT NOT NULL AUTO_INCREMENT, `server_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_category` VARCHAR(64) NOT NULL, `server_ip` INT NOT NULL DEFAULT '-1', `server_port` INT NOT NULL DEFAULT '0', `server_status` INT NOT NULL DEFAULT '0', `server_visible` INT NOT NULL DEFAULT '1', `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL DEFAULT '0', `reserved_slots` INT NOT NULL DEFAULT '0', `hidden_slots` INT(1) NOT NULL DEFAULT '0', `max_players` INT NOT NULL DEFAULT '0', `bots_included` INT NOT NULL DEFAULT '0', `unix_lastupdate` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `timeout_time` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), UNIQUE(`server_id`))", _, DBPrio_High);
 		CreateAdvertisementsTable();
 	}
 }
