@@ -92,29 +92,23 @@
 	
 	"ServerOfflineMenu"
 	{
-		// 1 - Server Format
-		"#format"	"{1:s}"
-		"en"		"{1} (SERVER OFFLINE)"
-		"chi"		"{1} (服务器未在线)"
-		"cze"		"{1} (SERVER JE VYPNUT)"
+		"en"		"(SERVER OFFLINE)"
+		"chi"		"(服务器未在线)"
+		"cze"		"(SERVER JE VYPNUT)"
 	}
 	
 	"ServerFullMenu"
 	{
-		// 1 - Server Format
-		"#format"	"{1:s}"
-		"en"		"{1} [FULL]"
-		"chi"		"{1} [满员]"
-		"cze"		"{1} [PLNÝ]"
+		"en"		"[FULL]"
+		"chi"		"[满员]"
+		"cze"		"[PLNÝ]"
 	}
 	
 	"ServerHiddenMenu"
 	{
-		// 1 - Server Format
-		"#format"	"{1:s}"
-		"en"		"{1} (HIDDEN)"
-		"chi"		"{1} (隐藏)"
-		"cze"		"{1} (SKRYTÝ)"
+		"en"		"(HIDDEN)"
+		"chi"		"(隐藏)"
+		"cze"		"(SKRYTÝ)"
 	}
 	
 	"ServerReservedSlots"
@@ -156,9 +150,21 @@
 	
 	"AddAdvertisementEditMenu"
 	{
+		"en"		"Add Advertisements"
+	}
+
+	"NoAdvertisementsFound"
+	{
+		// 1 - PREFIX //
+		"#format"	"{1:s}"
+		"en"		"{1} {lightred}No Advertisements was found.{default}"
+	}
+
+	"EditAdvertisementsMenuItem"
+	{
 		"en"		"Edit Advertisements"
 	}
-	
+
 	// EditAdvertisementPropertiesMenu //
 	
 	"MenuAddAdvServerToAdv"
@@ -341,7 +347,7 @@
 		// 3 - Old value
 		// 4 - New Value
 		"#format"	"{1:s},{2:t},{3:s},{4:s}"
-		"en"		"{1} {darkred}{2}{default} has been {green}successfully updated{default}. (From {darkred}'{3}'{default} TO {green}'{4}'{default})"
+		"en"		"{1} {darkred}{2}{default} has been {green}successfully{default} updated. (From {darkred}'{3}'{default} TO {green}'{4}'{default})"
 	}
 	
 	"ExitEditMode"

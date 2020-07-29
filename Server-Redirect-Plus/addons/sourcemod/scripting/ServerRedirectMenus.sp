@@ -226,11 +226,11 @@ public int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, i
 				if(g_srOtherServers[iServer].iReservedSlots && (!g_srOtherServers[iServer].bHiddenSlots || bCanUseReservedSlots))
 					Format(sEditBuffer, sizeof(sEditBuffer), "%s %t", sEditBuffer, "ServerReservedSlots", g_srOtherServers[iServer].iReservedSlots);
 					
-				mServerInfo.AddItem("", sEditBuffer, ITEMDRAW_DISABLED);
+				mServerInfo.AddItem("", sEditBuffer, g_srOtherServers[iServer].bServerStatus ? ITEMDRAW_DISABLED : ITEMDRAW_IGNORE);
 				
 				// Add 'Map'.
 				Format(sEditBuffer, sizeof(sEditBuffer), "%t\n ", "ServerMapMenu", g_srOtherServers[iServer].sServerMap);
-				mServerInfo.AddItem("", sEditBuffer, ITEMDRAW_DISABLED);
+				mServerInfo.AddItem("", sEditBuffer, g_srOtherServers[iServer].bServerStatus ? ITEMDRAW_DISABLED : ITEMDRAW_IGNORE);
 				
 				// Add clickable option to print the info.
 				Format(sEditBuffer, sizeof(sEditBuffer), "%t", "PrintInfoMenu");
@@ -238,7 +238,11 @@ public int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, i
 				
 				// Add clickable option to join the server.
 				Format(sEditBuffer, sizeof(sEditBuffer), "%t", "JoinServerMenu");
-				mServerInfo.AddItem(cServerID, sEditBuffer, !bIsServerFull || CheckCommandAccess(client, "server_redirect_join_full_bypass", ADMFLAG_ROOT) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
+				
+				if(!g_srOtherServers[iServer].bServerStatus)
+					Format(sEditBuffer, sizeof(sEditBuffer), "%s %t", sEditBuffer, "ServerOfflineMenu");
+				
+				mServerInfo.AddItem(cServerID, sEditBuffer, g_srOtherServers[iServer].bServerStatus && (!bIsServerFull || CheckCommandAccess(client, "server_redirect_join_full_bypass", ADMFLAG_ROOT)) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
 				
 				// Option to exit to the server category menu (Or to the main menu if there is no category)
 				mServerInfo.ExitButton = true;
@@ -289,8 +293,13 @@ public int ServerInfoMenuHandler(Menu ServerInfoMenu, MenuAction action, int cli
 					
 					CPrintToChat(client, "%t", "ServerInfoHeadline"	, PREFIX, g_srOtherServers[iServer].sServerName);
 					CPrintToChat(client, "%t", "ServerInfoIP"		, PREFIX, ServerIP[0], ServerIP[1], ServerIP[2], ServerIP[3], g_srOtherServers[iServer].iServerPort);
-					CPrintToChat(client, "%t", "ServerInfoMap"		, PREFIX, g_srOtherServers[iServer].sServerMap);
-					CPrintToChat(client, "%t", "ServerInfoPlayers"	, PREFIX, g_srOtherServers[iServer].iNumOfPlayers, g_srOtherServers[iServer].iMaxPlayers - ((!g_srOtherServers[iServer].bHiddenSlots || CanClientUseReservedSlots(client, iServer)) ? 0 : g_srOtherServers[iServer].iReservedSlots));
+					
+					if(g_srOtherServers[iServer].bServerStatus)
+					{
+						CPrintToChat(client, "%t", "ServerInfoMap"		, PREFIX, g_srOtherServers[iServer].sServerMap);
+						CPrintToChat(client, "%t", "ServerInfoPlayers"	, PREFIX, g_srOtherServers[iServer].iNumOfPlayers, g_srOtherServers[iServer].iMaxPlayers - ((!g_srOtherServers[iServer].bHiddenSlots || CanClientUseReservedSlots(client, iServer)) ? 0 : g_srOtherServers[iServer].iReservedSlots));
+					}
+					
 				}
 				// Clicked on the redirect / join button.
 				case 3:
@@ -377,7 +386,11 @@ stock void SelectServerMainMenu(int client, MenuHandler mMenuHandlerToUse, const
 	mServerList.SetTitle(sTitle);
 	
 	if(bAddEditAdvButton)
-		mServerList.AddItem("EditAdvertisements", "Edit Advertisements\n ", CheckCommandAccess(client, "server_redirect_edit_advertisements", ADMFLAG_ROOT) ? ITEMDRAW_DEFAULT : ITEMDRAW_IGNORE);
+	{
+		char sTranslationTextBuffer[32];
+		Format(sTranslationTextBuffer, sizeof(sTranslationTextBuffer), "%t\n ", "EditAdvertisementsMenuItem");
+		mServerList.AddItem("EditAdvertisements", sTranslationTextBuffer, CheckCommandAccess(client, "server_redirect_edit_advertisements", ADMFLAG_ROOT) ? ITEMDRAW_DEFAULT : ITEMDRAW_IGNORE);
+	}
 		
 	int iNumOfPublicCategories 	= LoadMenuCategories(mServerList, client);
 	int iNumOfPublicServers 	= LoadMenuServers(mServerList, client, "", iTitleLength);
@@ -409,23 +422,23 @@ stock int LoadMenuServers(Menu mMenu, int client, const char[] sCategory, int iT
 		strcopy(sServerShowString, iStringSize, g_sMenuFormat);
 		
 		if (!g_srOtherServers[iCurrentServer].bShowInServerList)
-			Format(sServerShowString, iStringSize, "%t", "ServerHiddenMenu", sServerShowString);
+			Format(sServerShowString, iStringSize, "%s %t", sServerShowString, "ServerHiddenMenu");
 			
 		if (g_srOtherServers[iCurrentServer].bServerStatus)
 		{
 			if (g_srOtherServers[iCurrentServer].iNumOfPlayers >= g_srOtherServers[iCurrentServer].iMaxPlayers - ((!g_srOtherServers[iCurrentServer].bHiddenSlots || CanClientUseReservedSlots(client, iCurrentServer)) ? 0 : g_srOtherServers[iCurrentServer].iReservedSlots))
-				Format(sServerShowString, iStringSize, "%t", "ServerFullMenu", sServerShowString);
+				Format(sServerShowString, iStringSize, "%s %t", sServerShowString, "ServerFullMenu");
 				
 			FormatStringWithServerProperties(sServerShowString, iStringSize, iCurrentServer, client);
 		}
 		else
-			Format(sServerShowString, iStringSize, "%t", "ServerOfflineMenu", g_srOtherServers[iCurrentServer].sServerName);
+			Format(sServerShowString, iStringSize, "%s %t", g_srOtherServers[iCurrentServer].sServerName, "ServerOfflineMenu");
 			
 		
 		char cServerID[3];
 		IntToString(iCurrentServer, cServerID, sizeof(cServerID));
 		
-		mMenu.AddItem(cServerID, sServerShowString, g_srOtherServers[iCurrentServer].bServerStatus ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
+		mMenu.AddItem(cServerID, sServerShowString);
 		iNumOfPublicServers++;
 	}
 	

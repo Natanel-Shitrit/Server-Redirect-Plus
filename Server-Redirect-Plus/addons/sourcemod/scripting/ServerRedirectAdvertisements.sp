@@ -159,12 +159,15 @@ public Action Command_EditServerRedirectAdvertisements(int client, int args)
 	Menu mEditAdvertisements = new Menu(EditAdvertisementsMenuHandler);
 	mEditAdvertisements.SetTitle("%t\n ", "MenuTitleEditAdvertisements", PREFIX_NO_COLOR);
 	
-	char sBuffer[64];
-	Format(sBuffer, sizeof(sBuffer), "%t\n ", "AddAdvertisementEditMenu");
-	mEditAdvertisements.AddItem("", "Add Advertisement\n ");
+	char sTranslationTextBuffer[64];
+	Format(sTranslationTextBuffer, sizeof(sTranslationTextBuffer), "%t\n ", "AddAdvertisementEditMenu");
+	mEditAdvertisements.AddItem("", sTranslationTextBuffer);
 	
 	if(LoadMenuAdvertisements(mEditAdvertisements) == 0)
-		mEditAdvertisements.AddItem("", "No Advertisements was found!");
+	{
+		Format(sTranslationTextBuffer, sizeof(sTranslationTextBuffer), "%t", "NoAdvertisementsFound");
+		mEditAdvertisements.AddItem("", sTranslationTextBuffer);
+	}
 	
 	mEditAdvertisements.ExitButton = true;
 	mEditAdvertisements.Display(client, MENU_TIME_FOREVER);
@@ -631,7 +634,7 @@ stock void PostAdvertisement(int iServerID, int iAdvertisementMode = ADVERTISEME
 	// If the server is Hidden, show only to authorized clients.		
 	if(!g_srOtherServers[iServerIndex].bShowInServerList)
 	{
-		Format(sMessageContent, sizeof(sMessageContent), "%t", "ServerHiddenMenu", sMessageContent);
+		Format(sMessageContent, sizeof(sMessageContent), "%s %t", sMessageContent, "ServerHiddenMenu");
 		
 		for (int iCurrentClient = 1; iCurrentClient <= MaxClients; iCurrentClient++)
 			if(ClientCanAccessToServer(iCurrentClient, iServerIndex))
