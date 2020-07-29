@@ -14,7 +14,8 @@ enum
 	SQL_FIELD_SERVER_MAX_PLAYERS,
 	SQL_FIELD_SERVER_INCLUD_BOTS,
 	SQL_FIELD_SERVER_LAST_UPDATE,
-	SQL_FIELD_SERVER_TIMEOUT
+	SQL_FIELD_SERVER_TIMEOUT,
+	SQL_FIELD_SERVER_LAST_UPDATE_UNIX
 }
 
 public Plugin myinfo = 
@@ -35,12 +36,44 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 	// If we got a respond lets fetch the data and store it
 	if (hQuery != INVALID_HANDLE)
 	{
+		bool bServerGotDeleted;
+		
 		// We are going to loop through all the server we got
 		int iCurrentServer;
 		for (iCurrentServer = 0; iCurrentServer < MAX_SERVERS && SQL_FetchRow(hQuery); iCurrentServer++)
 		{
+			g_srOtherServers[iCurrentServer].iServerID = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_ID);
+			
+			int iServerTimeOut = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_TIMEOUT) * 60;
+			if(iServerTimeOut > 0)
+			{
+				int iServerLastUpdate 		 = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_LAST_UPDATE_UNIX);
+				int iServerTimeWithoutUpdate = GetTime() - iServerLastUpdate;
+				
+				if(iServerTimeWithoutUpdate >= iServerTimeOut)
+				{
+					bServerGotDeleted = true;
+					
+					Format(Query, sizeof(Query), "DELETE FROM `server_redirect_servers` WHERE `server_id` = %d", g_srOtherServers[iCurrentServer].iServerID);
+					
+					if (g_cvPrintDebug.BoolValue)
+						LogMessage("Delete Server Query: %s", Query);
+						
+					DB.Query(T_FakeFastQuery, Query, _, DBPrio_Low);
+					
+					if (g_cvPrintDebug.BoolValue)
+						LogMessage("Deleting Server (Server-ID - %d | Last update - %d | timeout time in sec - %d | time without update %d)",
+						g_srOtherServers[iCurrentServer].iServerID,
+						iServerLastUpdate,
+						iServerTimeOut,
+						iServerTimeWithoutUpdate);
+					
+					iCurrentServer--;
+					continue;
+				}
+			}
+			
 			// Store everything that we get from the database 
-			g_srOtherServers[iCurrentServer].iServerID 	 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_ID);
 			g_srOtherServers[iCurrentServer].iServerIP32 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_IP);
 			g_srOtherServers[iCurrentServer].iServerPort 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_PORT);
 			g_srOtherServers[iCurrentServer].iReservedSlots = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_RESERVED_SLOTS);
@@ -60,7 +93,7 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 				g_srOtherServers[iCurrentServer].iNumOfPlayers 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_PLAYERS);
 				g_srOtherServers[iCurrentServer].iMaxPlayers 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_MAX_PLAYERS);
 				
-				if(g_bEnableAdvertisements)
+				if(g_bAdvertisementsAreEnabled)
 				{
 					int iServerAdvertisement = FindAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_PLAYERS_RANGE);
 				
@@ -77,10 +110,6 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 						PostAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_MAP);
 				}
 			}
-			
-			// Check if the server is timed out (this will remove the server from the array)
-			if(SQL_FetchInt(hQuery, SQL_FIELD_SERVER_TIMEOUT) > 0)
-				CheckIfServerTimedOut(g_srOtherServers[iCurrentServer].iServerID);
 			
 			if (g_cvPrintDebug.BoolValue)
 				LogMessage("[T_OnServersReceive -> LOOP(%d) -> IF] Server-ID %d (Status: %b | Show: %b): \nName: %s, Category: %s, Map: %s, IP32: %d, Port: %d, Number of players: %d, Max players: %d",
@@ -99,6 +128,9 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 		}
 		// Clean the rest of the array so we won't show servers that got deleted in the database and still somewhere in the array we didn't touch.
 		CleanServersArray(iCurrentServer);
+		
+		if(g_bAdvertisementsAreEnabled && bServerGotDeleted)
+			LoadAdvertisements(false);
 		
 		if (g_cvPrintDebug.BoolValue && !iCurrentServer)
 			LogError("No servers found in DB.");
@@ -287,7 +319,7 @@ stock void LoadServers()
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadServers");
 	
-	DB.Format(Query, sizeof(Query), "SELECT * FROM `server_redirect_servers` WHERE `server_id` != %d ORDER BY `server_id`", g_srCurrentServer.iServerID);
+	DB.Format(Query, sizeof(Query), "SELECT *, UNIX_TIMESTAMP(unix_lastupdate) FROM `server_redirect_servers` WHERE `server_id` != %d ORDER BY `server_id`", g_srCurrentServer.iServerID);
 	
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage("[LoadServers] Query: %s", Query);

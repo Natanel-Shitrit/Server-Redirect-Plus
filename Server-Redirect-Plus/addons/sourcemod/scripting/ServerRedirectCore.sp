@@ -43,7 +43,7 @@ ConVar 	g_cvReservedSlots;						// Number of reserved slots.
 ConVar 	g_cvHiddenSlots;						// If the reserved slots are hidden or not.
 
 bool 	g_bShowServerOnServerList; 				// Show this server in the Server-List?
-bool 	g_bEnableAdvertisements; 				// Should we advertise servers?
+bool 	g_bAdvertisementsAreEnabled; 			// Should we advertise servers?
 bool 	g_bAdvertiseOfflineServers; 			// Should we advertise offline servers?
 
 char 	g_sServerListCommands[256];				// Commands for the Server-List.
@@ -348,7 +348,7 @@ public void T_OnDBConnected(Database dbMain, const char[] sError, any bOnlyConne
 		if(bOnlyConnect)
 			return;
 		
-		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS server_redirect_servers (`id` INT NOT NULL AUTO_INCREMENT, `server_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_category` VARCHAR(64) NOT NULL, `server_ip` INT NOT NULL DEFAULT '-1', `server_port` INT NOT NULL DEFAULT '0', `server_status` INT NOT NULL DEFAULT '0', `server_visible` INT NOT NULL DEFAULT '1', `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL DEFAULT '0', `reserved_slots` INT NOT NULL DEFAULT '0', `hidden_slots` INT(1) NOT NULL DEFAULT '0', `max_players` INT NOT NULL DEFAULT '0', `bots_included` INT NOT NULL DEFAULT '0', `unix_lastupdate` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `timeout_time` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), UNIQUE(`server_id`))", _, DBPrio_High);
+		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS server_redirect_servers (`id` INT NOT NULL AUTO_INCREMENT, `server_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_category` VARCHAR(64) NOT NULL, `server_ip` INT NOT NULL DEFAULT '-1', `server_port` INT NOT NULL DEFAULT '0', `server_status` INT NOT NULL DEFAULT '0', `server_visible` INT NOT NULL DEFAULT '1', `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL DEFAULT '0', `reserved_slots` INT NOT NULL DEFAULT '0', `hidden_slots` INT(1) NOT NULL DEFAULT '0', `max_players` INT NOT NULL DEFAULT '0', `bots_included` INT NOT NULL DEFAULT '0', `unix_lastupdate` TIMESTAMP on update CURRENT_TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `timeout_time` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), UNIQUE(`server_id`))", _, DBPrio_High);
 		CreateAdvertisementsTable();
 	}
 }
@@ -464,55 +464,6 @@ stock void UpdateServerInfo()
 	DB.Query(T_OnServerSearchReceived, Query, _, DBPrio_High);
 }
 
-stock void CheckIfServerTimedOut(int iServerID)
-{
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- CheckIfServerTimedOut");
-	
-	Format(Query, sizeof(Query), "SELECT UNIX_TIMESTAMP(`unix_lastupdate`), `timeout_time` * 60  FROM `server_redirect_servers` WHERE `server_id` = %d", iServerID);
-	
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage("CheckIfServerTimedOut Query: %s", Query);
-	
-	DB.Query(T_OnTimeoutResultReceived, Query, iServerID, DBPrio_Low);
-}
-
-void T_OnTimeoutResultReceived(Handle owner, Handle hQuery, const char[] sError, any iServerID)
-{
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- T_OnTimeoutResultReceived");
-		
-	if (hQuery != INVALID_HANDLE)
-	{
-		// If the server exists:
-		if(SQL_FetchRow(hQuery))
-		{
-			int iTimeWithoutUpdate = GetTime() - SQL_FetchInt(hQuery, 0);
-			
-			if(iTimeWithoutUpdate >= SQL_FetchInt(hQuery, 1))
-			{
-				if (g_cvPrintDebug.BoolValue)
-					LogMessage("Deleting Server (Server-ID - %d | Last update - %d | timeout time in sec - %d | time without update %d)",
-					iServerID,
-					SQL_FetchInt(hQuery, 0),
-					SQL_FetchInt(hQuery, 1),
-					iTimeWithoutUpdate
-					);
-				
-				Format(Query, sizeof(Query), "DELETE FROM `server_redirect_servers` WHERE `server_id` = %d", iServerID);
-				DB.Query(T_FakeFastQuery, Query, _, DBPrio_Low);
-				
-				Server CleanServer;
-				g_srOtherServers[iServerID] = CleanServer;
-			}
-		}
-		else
-			LogError("%s Somehow we didn't find the server?", PREFIX_NO_COLOR);
-	}
-	else
-		LogError("Error in T_OnTimeoutResultReceived: %s", sError);
-}
-
 void T_OnServerSearchReceived(Handle owner, Handle hQuery, const char[] sError, any data)
 {
 	if (g_cvPrintDebug.BoolValue)
@@ -594,7 +545,7 @@ stock void LoadSettings()
 	g_srCurrentServer.bIncludeBots 		= view_as<bool>(kvSettings.GetNum("ShowBots"				, 0));
 	g_srCurrentServer.bShowInServerList = view_as<bool>(kvSettings.GetNum("ShowSeverInServerList"	, 1));
 	
-	g_bEnableAdvertisements 	= view_as<bool>(kvSettings.GetNum("EnableAdvertisements"	, 1));
+	g_bAdvertisementsAreEnabled 	= view_as<bool>(kvSettings.GetNum("EnableAdvertisements"	, 1));
 	g_bAdvertiseOfflineServers 	= view_as<bool>(kvSettings.GetNum("AdvertiseOfflineServers"	, 0));
 	
 	g_iServerTimeOut = kvSettings.GetNum("ServerTimeOut", 1440);

@@ -121,7 +121,7 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 // Timer to advertise
 public Action Timer_Loop(Handle hTimer)
 {
-	if(!g_bEnableAdvertisements)
+	if(!g_bAdvertisementsAreEnabled)
 		return Plugin_Stop;
 	
 	++g_iTimerCounter;
