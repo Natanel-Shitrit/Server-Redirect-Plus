@@ -98,11 +98,11 @@ enum
 //======[ UPDATE ADV ENUM ]=====//
 enum
 {
-	UPDATE_NOTHING 			= -1,	// Updating nothing
-	UPDATE_LOOP_TIME 			,	// Updating Loop time
-	UPDATE_COOLDOWN_TIME 		,	// Updating Cooldown time
-	UPDATE_PLAYER_RANGE 		,	// Updating player range
-	UPDATE_ADV_MESSAGE 				// Updating message string
+	UPDATE_NOTHING = -1	,	// Updating nothing
+	UPDATE_LOOP_TIME 	,	// Updating Loop time
+	UPDATE_COOLDOWN_TIME,	// Updating Cooldown time
+	UPDATE_PLAYER_RANGE ,	// Updating player range
+	UPDATE_ADV_MESSAGE 		// Updating message string
 }
 int g_iUpdateAdvProprietary[MAXPLAYERS + 1] =  { UPDATE_NOTHING, ... };
 
@@ -457,6 +457,10 @@ stock void UpdateServerInfo()
 		LogMessage(" <-- UpdateServerInfo");
 		
 	Format(Query, sizeof(Query), "SELECT * FROM `server_redirect_servers` WHERE `server_id` = %d", g_srCurrentServer.iServerID);
+	
+	if (g_cvPrintDebug.BoolValue)
+		LogMessage("UpdateServerInfo Query: %s", Query);
+	
 	DB.Query(T_OnServerSearchReceived, Query, _, DBPrio_High);
 }
 
@@ -466,6 +470,10 @@ stock void CheckIfServerTimedOut(int iServerID)
 		LogMessage(" <-- CheckIfServerTimedOut");
 	
 	Format(Query, sizeof(Query), "SELECT UNIX_TIMESTAMP(`unix_lastupdate`), `timeout_time` * 60  FROM `server_redirect_servers` WHERE `server_id` = %d", iServerID);
+	
+	if (g_cvPrintDebug.BoolValue)
+		LogMessage("CheckIfServerTimedOut Query: %s", Query);
+	
 	DB.Query(T_OnTimeoutResultReceived, Query, iServerID, DBPrio_Low);
 }
 
@@ -501,8 +509,8 @@ void T_OnTimeoutResultReceived(Handle owner, Handle hQuery, const char[] sError,
 		else
 			LogError("%s Somehow we didn't find the server?", PREFIX_NO_COLOR);
 	}
-	else // We got an error while trying to send this query, don't continue.
-		SetFailState("%s Error in T_OnInfoNameReceived: %s", PREFIX_NO_COLOR, sError);
+	else
+		LogError("Error in T_OnTimeoutResultReceived: %s", sError);
 }
 
 void T_OnServerSearchReceived(Handle owner, Handle hQuery, const char[] sError, any data)
@@ -521,7 +529,7 @@ void T_OnServerSearchReceived(Handle owner, Handle hQuery, const char[] sError, 
 			// Update the server.
 			UpdateServer(UPDATE_SERVER_START, DBPrio_Normal);
 		}
-		else // else, the server doesn't exit:
+		else // else, the server doesn't exist:
 		{
 			if (g_cvPrintDebug.BoolValue)
 				LogMessage("Didn't find any servers with the ID - %d, Registering it.", g_srCurrentServer.iServerID);
@@ -530,10 +538,11 @@ void T_OnServerSearchReceived(Handle owner, Handle hQuery, const char[] sError, 
 			RegisterServer();
 		}
 	}
-	else // We got an error while trying to send this query, don't continue.
-		SetFailState("%s Error in T_OnInfoNameReceived: %s", PREFIX_NO_COLOR, sError);
+	else
+		LogError("Error in T_OnServerSearchReceived: %s", sError);
 }
 
+// We only need to send the query, nothing to receive.
 void T_FakeFastQuery(Handle owner, Handle hQuery, const char[] sError, any data)
 {
 	if (g_cvPrintDebug.BoolValue)
@@ -834,6 +843,7 @@ stock bool String_EndsWith(const char[] str, const char[] subString)
 * 3. [✓] Add reserve slot support for the player-count.
 * 2. [✗] Add an option to show / hide certian servers.
 * 4. [✗] Multi-Select for advertisements
+* 5. [✗] Add to servers table struct the Account-ID so we identify the server automaticlly
 *
 * Later Releases:
 * 1. [✗] Make the plugin more dynamic and use arraylist so i wont have to use fixed arrays

@@ -121,6 +121,9 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 // Timer to advertise
 public Action Timer_Loop(Handle hTimer)
 {
+	if(!g_bEnableAdvertisements)
+		return Plugin_Stop;
+	
 	++g_iTimerCounter;
 	
 	// Loop throw all the advertisements (all valid advertisements).
@@ -190,6 +193,11 @@ public int EditAdvertisementsMenuHandler(Menu EditAdvertisementsMenu, MenuAction
 			}
 			
 			EditAdvertisementPropertiesMenu(client);
+		}
+		case MenuAction_Cancel:
+		{
+			if (Clicked == MenuCancel_Exit)
+				Command_ServerList(client, 0);
 		}
 		case MenuAction_End:
 			delete EditAdvertisementsMenu;
@@ -599,14 +607,6 @@ stock void PostAdvertisement(int iServerID, int iAdvertisementMode = ADVERTISEME
 
 	// Get Server index.
 	int iServerIndex = GetServerIndexByServerID(iServerID);
-	
-	// Skip if Advertisements are disabled
-	if(!g_bEnableAdvertisements)
-	{
-		if(g_cvPrintDebug.BoolValue)
-			LogMessage("Advertisements are disabled, change 'PrefixRemover' to '1' in the plugin cfg to enable advertisements!");
-		return;
-	}
 		
 	// Skip if the server is down (unless we want to post offline servers).
 	if(!g_bAdvertiseOfflineServers && !g_srOtherServers[iServerIndex].bServerStatus)

@@ -60,19 +60,22 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 				g_srOtherServers[iCurrentServer].iNumOfPlayers 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_PLAYERS);
 				g_srOtherServers[iCurrentServer].iMaxPlayers 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_MAX_PLAYERS);
 				
-				int iServerAdvertisement = FindAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_PLAYERS_RANGE);
+				if(g_bEnableAdvertisements)
+				{
+					int iServerAdvertisement = FindAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_PLAYERS_RANGE);
 				
-				if (iServerAdvertisement != -1 && g_advAdvertisements[iServerAdvertisement].iPlayersRange[0] < g_srOtherServers[iCurrentServer].iNumOfPlayers < g_advAdvertisements[iServerAdvertisement].iPlayersRange[1])
-					PostAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_PLAYERS_RANGE);
+					if (iServerAdvertisement != -1 && g_advAdvertisements[iServerAdvertisement].iPlayersRange[0] < g_srOtherServers[iCurrentServer].iNumOfPlayers < g_advAdvertisements[iServerAdvertisement].iPlayersRange[1])
+						PostAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_PLAYERS_RANGE);
+					
+					char sOldMap[PLATFORM_MAX_PATH];
+					if (!StrEqual(g_srOtherServers[iCurrentServer].sServerMap, "", false))
+						strcopy(sOldMap, sizeof(sOldMap), g_srOtherServers[iCurrentServer].sServerMap);
 				
-				char sOldMap[PLATFORM_MAX_PATH];
-				if (!StrEqual(g_srOtherServers[iCurrentServer].sServerMap, "", false))
-					strcopy(sOldMap, sizeof(sOldMap), g_srOtherServers[iCurrentServer].sServerMap);
-			
-				SQL_FetchString(hQuery, SQL_FIELD_SERVER_MAP, g_srOtherServers[iCurrentServer].sServerMap, sizeof(g_srOtherServers[].sServerMap));
-			
-				if (!StrEqual(sOldMap, g_srOtherServers[iCurrentServer].sServerMap))
-					PostAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_MAP);
+					SQL_FetchString(hQuery, SQL_FIELD_SERVER_MAP, g_srOtherServers[iCurrentServer].sServerMap, sizeof(g_srOtherServers[].sServerMap));
+				
+					if (!StrEqual(sOldMap, g_srOtherServers[iCurrentServer].sServerMap))
+						PostAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_MAP);
+				}
 			}
 			
 			// Check if the server is timed out (this will remove the server from the array)
@@ -104,7 +107,7 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 			LogError("%s There is more servers in SQL-Database server than MAX_SERVERS, please recompile it with MAX_SERVERS with a greater amount.", PREFIX_NO_COLOR);
 	}
 	else
-		LogError("Error: %s", sError);
+		LogError("T_OnServersReceive Error: %s", sError);
 }
 
 // Timer for other servers update
@@ -154,9 +157,9 @@ public int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, i
 			char sMenuItemInfo[MAX_CATEGORY_NAME_LENGHT];
 			ListMenu.GetItem(Clicked, sMenuItemInfo, sizeof(sMenuItemInfo));
 			
-			if (Clicked == 0 && StrEqual(sMenuItemInfo, "EditAdvertisements"))	// If it was the edit advertisement button, open the edit menu.
+			if (StrEqual(sMenuItemInfo, "EditAdvertisements"))		// If it was the edit advertisement button, open the edit menu.
 				Command_EditServerRedirectAdvertisements(client, 0);
-			else if (String_StartsWith(sMenuItemInfo, "[C]")) 					// If it was a category, show the category servers
+			else if (String_StartsWith(sMenuItemInfo, "[C]")) 		// If it was a category, show the category servers
 				LoadCategoryMenu(client, sMenuItemInfo[4]);
 				
 			// If we ended up here the client clicked on a server, let's prepare the server menu.
@@ -205,7 +208,7 @@ public int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, i
 				Format(sEditBuffer, sizeof(sEditBuffer), "%t", "JoinServerMenu");
 				mServerInfo.AddItem(cServerID, sEditBuffer, !bIsServerFull || CheckCommandAccess(client, "server_redirect_join_full_bypass", ADMFLAG_ROOT) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
 				
-				// Option to exit from the menu (if was in a category - to the main menu, else - just close the menu)
+				// Option to exit to the server category menu (Or to the main menu if there is no category)
 				mServerInfo.ExitButton = true;
 				
 				// Display the menu.
@@ -214,7 +217,10 @@ public int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, i
 		}
 		case MenuAction_Cancel:
 		{
-			if (Clicked == MenuCancel_ExitBack)
+			char sFirstMenuItemInfoBuffer[32];
+			ListMenu.GetItem(0, sFirstMenuItemInfoBuffer, sizeof(sFirstMenuItemInfoBuffer));
+			
+			if (Clicked == MenuCancel_Exit && !StrEqual(sFirstMenuItemInfoBuffer, "EditAdvertisements") && !StrEqual(g_srOtherServers[StringToInt(sFirstMenuItemInfoBuffer)].sServerCategory, ""))
 				Command_ServerList(client, 0);
 		}
 		case MenuAction_End:
@@ -317,19 +323,18 @@ stock void SelectServerMenu(int client, const char[] sCategory, MenuHandler hMen
 {
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- SelectServerMenu");
-	
+
 	Menu mServerCategoryList = new Menu(hMenuHandlerToUse);
-	
+
 	mServerCategoryList.SetTitle(sTitle);
-	
+
 	int iNumOfPublicServers = LoadMenuServers(mServerCategoryList, client, sCategory, iTitleLength);
-	
+
 	if(iNumOfPublicServers == 0)
 		CPrintToChat(client, "%t", "NoServersFound", PREFIX);
-					
+
 	mServerCategoryList.ExitButton = true;
-	mServerCategoryList.ExitBackButton = true;
-			
+
 	mServerCategoryList.Display(client, MENU_TIME_FOREVER);
 }
 
