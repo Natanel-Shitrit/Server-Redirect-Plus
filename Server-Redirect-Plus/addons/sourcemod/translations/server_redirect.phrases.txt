@@ -13,7 +13,7 @@
 	"NumberOfPlayersMenu"
 	{
 		// 1 - Number Of Players, 2 - Max Players, 3 - Server Full Prefix //
-		"#format"	"{1:d},{2:d},{3:s}"
+		"#format"	"{1:d},{2:d},{3:t}"
 		"en"		"Number of players: {1} / {2} {3}"
 		"chi"		"玩家数量: {1} / {2} {3}"
 		"cze"		"Počet hráčů: {1} / {2} {3}"
@@ -92,31 +92,31 @@
 	
 	"ServerOfflineMenu"
 	{
-		// 1 - Server Format
-		"#format"	"{1:s}"
-		"en"		"{1} (SERVER OFFLINE)"
-		"chi"		"{1} (服务器未在线)"
-		"cze"		"{1} (SERVER JE VYPNUT)"
+		"en"		"(SERVER OFFLINE)"
+		"chi"		"(服务器未在线)"
+		"cze"		"(SERVER JE VYPNUT)"
 	}
 	
 	"ServerFullMenu"
 	{
-		// 1 - Server Format
-		"#format"	"{1:s}"
-		"en"		"{1} [FULL]"
-		"chi"		"{1} [满员]"
-		"cze"		"{1} [PLNÝ]"
+		"en"		"[FULL]"
+		"chi"		"[满员]"
+		"cze"		"[PLNÝ]"
 	}
 	
 	"ServerHiddenMenu"
 	{
-		// 1 - Server Format
-		"#format"	"{1:s}"
-		"en"		"{1} (HIDDEN)"
-		"chi"		"{1} (隐藏)"
-		"cze"		"{1} (SKRYTÝ)"
+		"en"		"(HIDDEN)"
+		"chi"		"(隐藏)"
+		"cze"		"(SKRYTÝ)"
 	}
 	
+	"ServerReservedSlots"
+	{
+		// 1 - Number of reserved slots
+		"#format"	"{1:d}"
+		"en"		"({1} Reserved Slots)"
+	}
 	
 	// Command_ServerList //
 	"MenuTitleMain"
@@ -150,9 +150,21 @@
 	
 	"AddAdvertisementEditMenu"
 	{
+		"en"		"Add Advertisements"
+	}
+
+	"NoAdvertisementsFound"
+	{
+		// 1 - PREFIX //
+		"#format"	"{1:s}"
+		"en"		"{1} {lightred}No Advertisements was found.{default}"
+	}
+
+	"EditAdvertisementsMenuItem"
+	{
 		"en"		"Edit Advertisements"
 	}
-	
+
 	// EditAdvertisementPropertiesMenu //
 	
 	"MenuAddAdvServerToAdv"
@@ -260,7 +272,115 @@
 		"en"		"{1} Select Server from {2}"
 	}
 	
+	// ADVERTISMENTS ERRORS // 
 	
+	"AdvertisementErrorHeader"
+	{
+		// 1 - Prefix
+		"#format"	"{1:s}"
+		"en"		"{1} Please {green}Resolve{default} the following {darkred}issues{default} and try again:"
+	}
+	
+	//Invalid Server-ID
+	"AdvertisementError1"
+	{
+		"en"		"{green}Server-ID{default} is not a valid Server! {darkred}(Couldn't find the server){default}"
+	}
+	
+	//Empty Message
+	"AdvertisementError2"
+	{
+		"en"		"{green}Message-Content{default} Is Empty! {green}Please re-enter the advertisement Message-Content.{default}"
+	}
+	
+	//Exceed Player-Range End
+	"AdvertisementError3"
+	{
+		"en"		"{green}Player-Range{default} is Invalid! {green}({darkred}Player-Range Start{green} should be {darkred}LOWER{green} than {darkred}Player-Range End{green}){default}"
+	}
+	
+	//Invalid Player-Range Start
+	"AdvertisementError4"
+	{
+		"en"		"{green}Player-Range Start{default} doesn't have a valid value! {green}(0 < valid value < MAX PLAYERS){default}"
+	}
+	
+	//Invalid Player-Range End
+	"AdvertisementError5"
+	{
+		"en"		"{green}Player-Range End{default} doesn't have a valid value! {green}(0 < valid value < MAX PLAYERS){default}"
+	}
+	
+	"AdvertisementErrorInvalidValue"
+	{
+		// 1 - Prefix
+		// 2 - Value
+		"#format"	"{1:s},{2:d}"
+		"en"		"{1} {darkred}{2}{default} is not a valid value! {green}valid value --> ([number] > 0){default}"
+	}
+	
+	"AdvertisementErrorInvalidPlayerRange"
+	{
+		// 1 - Prefix
+		"#format"	"{1:s}"
+		"en"		"{1} {darkred}Invalid{default} string for {green}Player-Range{default}."
+	}
+	
+	"PlayerRangeStringExampleRow1"
+	{
+		// 1 - Prefix
+		"#format"	"{1:s}"
+		"en"		"{1} {green}Valid{default} string template: {darkred}{min}|{max}{default}"
+	}
+	
+	"PlayerRangeStringExampleRow2"
+	{
+		// 1 - Prefix
+		"#format"	"{1:s}"
+		"en"		"{1} {green}Example{default}: {darkred}10|15{default} (10 is {green}min{default}, 15 is {darkred}max{default})"
+	}
+	
+	"UpdatedSuccessfullyTemplate"
+	{
+		// 1 - Prefix
+		// 2 - What got updated (translated)
+		// 3 - Old value
+		// 4 - New Value
+		"#format"	"{1:s},{2:t},{3:s},{4:s}"
+		"en"		"{1} {darkred}{2}{default} has been {green}successfully{default} updated. (From {darkred}'{3}'{default} TO {green}'{4}'{default})"
+	}
+	
+	"ExitEditMode"
+	{
+		// 1 - Prefix
+		"#format"	"{1:s}"
+		"en"		"{1} You {darkred}Left{default} the {green}Edit Mode{default}!"
+	}
+	
+	"LoopTimeTranslation"
+	{
+		"en"		"Loop-Time"
+	}
+	
+	"CooldownTimeTranslation"
+	{
+		"en"		"Cooldown"
+	}
+	
+	"PlayerRangeTranslation"
+	{
+		"en"		"Player-Range"
+	}
+	
+	"AdvMessageTranslation"
+	{
+		"en"		"Advertisement-Message"
+	}
+	
+	"EmptyText"
+	{
+		"en"		""
+	}
 	
 	//{default}", "{darkred}", "{green}", "{lightgreen}", "{red}", "{blue}", "{olive}", "{lime}",
 	//"{lightred}", "{purple}", "{grey}", "{yellow}", "{orange}", "{bluegrey}", "{lightblue}"
