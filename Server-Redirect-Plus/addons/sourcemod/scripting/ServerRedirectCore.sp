@@ -533,8 +533,14 @@ stock void LoadSettings()
 	// If the ServerID is invalid, Get the server Steam-ID.
 	if(g_srCurrentServer.iServerID < 1)
 	{
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage("Invalid ServerID (%d) from the config, using Server Steam Accound-ID.", g_srCurrentServer.iServerID);
+		
 		// This is not the best way but 
 		g_srCurrentServer.iServerID = GetServerSteamAccountId();
+		
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage("Server Steam Accound-ID: %d", g_srCurrentServer.iServerID);
 		
 		// If we don't have the server steam account id and we didn't got a ServerID ask for a manual configuration.
 		if(g_srCurrentServer.iServerID == 0)
@@ -557,7 +563,8 @@ stock void LoadSettings()
 	kvSettings.GetString("ServerCategory"		, g_srCurrentServer.sServerCategory	, sizeof(g_srCurrentServer.sServerCategory)	);
 	
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage("Settings Loaded:\nMenuFormat: %s\nServerListCommands: %s\nServerName: %s\nServerCategory: %s\nShowBots: %d\nShowSeverInServerList: %d",
+		LogMessage("Settings Loaded:\nServerID: %d\nMenuFormat: %s\nServerListCommands: %s\nServerName: %s\nServerCategory: %s\nShowBots: %d\nShowSeverInServerList: %d",
+		g_srCurrentServer.iServerID,
 		g_sMenuFormat,
 		g_sServerListCommands,
 		g_srCurrentServer.sServerName,
