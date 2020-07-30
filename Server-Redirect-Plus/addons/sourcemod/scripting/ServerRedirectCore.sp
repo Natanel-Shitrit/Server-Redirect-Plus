@@ -162,7 +162,8 @@ public void OnPluginStart()
 	
 	rgCountStrings = CompileRegex(REGEX_COUNT_STRINGS);
 	//==============================[ HOOKS ]===========================//
-	HookEvent("server_shutdown", Event_ServerShutDown, EventHookMode_Pre);
+	HookEvent("server_spawn"	, Event_ServerSpawn		, EventHookMode_Post);
+	HookEvent("server_shutdown"	, Event_ServerShutDown	, EventHookMode_Pre);
 	
 	//==========================[ ADMIN COMMANDS ]======================//
 	RegAdminCmd("sm_editsradv", Command_EditServerRedirectAdvertisements, ADMFLAG_ROOT, "Edit server Advertisements");
@@ -172,35 +173,45 @@ public void OnPluginStart()
 	g_cvUpdateServerInterval 		= CreateConVar("server_redirect_server_update_interval"			, "20.0", "The number of seconds the plugin will wait before updating player count in the SQL server." 	, _, true, 0.0, true, 600.0	);
 	g_cvPrintDebug 					= CreateConVar("server_redirect_debug_mode"						, "0"	, "Whether or not to print debug messages in server console"									, _, true, 0.0, true, 1.0	);
 	
-	g_cvNetPublicAdr  = FindConVar("net_public_adr"		);
-	g_cvReservedSlots = FindConVar("sm_reserved_slots"	);
-	g_cvHiddenSlots	  = FindConVar("sm_hide_slots"		);
-	
 	//========================[ CVAR Change Hooks ]=====================//
 	g_cvUpdateOtherServersInterval.AddChangeHook(OnCvarChange);
 	
 	//=========================[ AutoExec Config ]======================//
 	AutoExecConfig(true);
 	
+	//=======================[ Other Console-Vars ]=====================//
+	g_cvNetPublicAdr  = FindConVar("net_public_adr"		);
+	g_cvReservedSlots = FindConVar("sm_reserved_slots"	);
+	g_cvHiddenSlots	  = FindConVar("sm_hide_slots"		);
+	
 	//========================[ Load Translations ]=====================//
 	LoadTranslations("server_redirect.phrases");
-	
-	// Load Settings from the config
-	LoadSettings();
-
-	// Load the Server-List commands from the convar / config
-	LoadServerListCommands();
 }
 
 // We are getting the Server info here because some things are invalid before,
 // And we must load the database only after we know we have everyting to send.
-public void OnMapStart()
+public Action Event_ServerSpawn(Event event, const char[] name, bool dontBroadcast)
 {
-	// Get Server info to send to the database
-	GetServerInfo();
+	if (g_cvPrintDebug.BoolValue)
+		LogMessage(" <-- Event_ServerSpawn");
+		
+	// Load Settings from the config
+	LoadSettings();
+	
+	// Load the Server-List commands from the convar / config
+	LoadServerListCommands();
 	
 	// Loading the Database
 	LoadDB();
+}
+
+public void OnMapStart()
+{
+	if (g_cvPrintDebug.BoolValue)
+		LogMessage(" <-- OnMapStart");
+	
+	// Get Server info to send to the database
+	GetServerInfo();
 }
 
 // OnClientConnected & OnClientDisconnect_Post Will start the Server-Update timer if it's not already running.
@@ -265,8 +276,11 @@ public void OnClientDisconnect(int client)
 // Updating the needed stuff when Con-Var is getting changed. //
 public void OnCvarChange(ConVar cVar, char[] oldValue, char[] newValue)
 {
+	char sConVarName[64];
+	g_cvUpdateOtherServersInterval.GetName(sConVarName, sizeof(sConVarName));
+	
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- OnCvarChange");
+		LogMessage(" <-- OnCvarChange | cVar - %s, oldValue - %s, newValue - %s", sConVarName, oldValue, newValue);
 	
 	// Kill the old timer, we don't need him anymore.
 	KillTimer(g_hOtherServersUpdateTimer);
@@ -319,20 +333,34 @@ public Action Timer_UpdateServerInDatabase(Handle timer)
 
 //==================================[ DB-STUFF ]==============================//
 // Loading the Database config from sourcemod/configs/databases.cfg, checking if the table existes and if not creating a new one.
-stock void LoadDB(bool bOnlyConnect = false)
+stock void LoadDB()
 {
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- LoadDB | bOnlyConnect = %b", bOnlyConnect);
+		LogMessage(" <-- LoadDB");
 	
 	// Connect to the database
+	
 	if(DB == null)
-		Database.Connect(T_OnDBConnected, "ServerRedirect", bOnlyConnect);
+	{
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage("Starting Full Database load");
+		
+		if (SQL_CheckConfig("ServerRedirect"))
+			Database.Connect(T_OnDBConnected, "ServerRedirect");
+		else
+			SetFailState("%s Cannot find 'ServerRedirect` config in databases.cfg", PREFIX_NO_COLOR);
+	}
 	else
+	{
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage("Already got Database a connection, just updating the server.");
+		
 		UpdateServerInfo();
+	}
 }
 
 // When we got a response from the db and we either connected or not.
-public void T_OnDBConnected(Database dbMain, const char[] sError, any bOnlyConnect)
+public void T_OnDBConnected(Database dbMain, const char[] sError, any data)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- T_OnDBConnected");
@@ -344,10 +372,7 @@ public void T_OnDBConnected(Database dbMain, const char[] sError, any bOnlyConne
 		// Save the database globally to send queries :D
 		DB = dbMain;
 		
-		// Should the database only connect or also continue to the startup process
-		if(bOnlyConnect)
-			return;
-		
+		// Create Tables
 		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS server_redirect_servers (`id` INT NOT NULL AUTO_INCREMENT, `server_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_category` VARCHAR(64) NOT NULL, `server_ip` INT NOT NULL DEFAULT '-1', `server_port` INT NOT NULL DEFAULT '0', `server_status` INT NOT NULL DEFAULT '0', `server_visible` INT NOT NULL DEFAULT '1', `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL DEFAULT '0', `reserved_slots` INT NOT NULL DEFAULT '0', `hidden_slots` INT(1) NOT NULL DEFAULT '0', `max_players` INT NOT NULL DEFAULT '0', `bots_included` INT NOT NULL DEFAULT '0', `unix_lastupdate` TIMESTAMP on update CURRENT_TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `timeout_time` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), UNIQUE(`server_id`))", _, DBPrio_High);
 		CreateAdvertisementsTable();
 	}
@@ -380,7 +405,7 @@ public void T_OnDatabaseReady(Handle owner, Handle hQuery, const char[] sError, 
 stock void UpdateServer(int iWhatToUpdate, DBPriority dbPriority = DBPrio_Normal)
 {
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- UpdateServer | int iWhatToUpdate = %d", iWhatToUpdate);
+		LogMessage(" <-- UpdateServer | iWhatToUpdate = %d", iWhatToUpdate);
 	
 	switch (iWhatToUpdate)
 	{
@@ -483,9 +508,9 @@ void T_OnServerSearchReceived(Handle owner, Handle hQuery, const char[] sError, 
 		else // else, the server doesn't exist:
 		{
 			if (g_cvPrintDebug.BoolValue)
-				LogMessage("Didn't find any servers with the ID - %d, Registering it.", g_srCurrentServer.iServerID);
+				LogMessage("Couldn't find any servers with this ID (%d), Registering a new server.", g_srCurrentServer.iServerID);
 			
-			// Register it.
+			// Registering the server with the Server-ID.
 			RegisterServer();
 		}
 	}
@@ -516,7 +541,7 @@ stock bool IsValidClient(int client, bool bAllowBots = false, bool bAllowDead = 
 stock void LoadSettings()
 {
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- LoadServerListCommands");
+		LogMessage(" <-- LoadSettings");
 	
 	KeyValues kvSettings = CreateKeyValues("ServerRedirectSettings");
 	
@@ -578,10 +603,7 @@ stock void LoadSettings()
 stock void LoadServerListCommands()
 {
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- LoadServerListCommands");
-	
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage("Commands: %s", g_sServerListCommands);
+		LogMessage(" <-- LoadServerListCommands | Commands string - %s", g_sServerListCommands);
 	
 	// Get the commands separated from each other.
 	char sSingleCommands[32][16];
@@ -603,7 +625,7 @@ stock void StartUpdateTimer()
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- StartUpdateTimer");
 	
-	if (g_hServerUpdateTimer == INVALID_HANDLE)
+	if (!g_hServerUpdateTimer)
 	{
 		g_hServerUpdateTimer = CreateTimer(g_cvUpdateServerInterval.FloatValue, Timer_UpdateServerInDatabase);
 		
@@ -611,14 +633,14 @@ stock void StartUpdateTimer()
 			LogMessage("ServerUpdateTimer Started");
 	}
 	else if (g_cvPrintDebug.BoolValue)
-		LogMessage("ServerUpdateTimer didn't start because it's already running (Valid: %b)", g_hServerUpdateTimer != INVALID_HANDLE);
+		LogMessage("ServerUpdateTimer didn't start because it's already running (Valid: %b)", !g_hServerUpdateTimer);
 }
 
 // Get the name of the workshop map.
-stock void GetCurrentWorkshopMap(char[] sMap, int iMapBuf)
+stock void GetCurrentWorkshopMap(char[] sMap, int iMapBufferSize)
 {
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- GetCurrentWorkshopMap");
+		LogMessage(" <-- GetCurrentWorkshopMap | sMap - %s, iMapBufferSize - %d", sMap, iMapBufferSize);
 	
 	char sCurMap[128];
 	char sMapSplit[2][64];
@@ -627,7 +649,7 @@ stock void GetCurrentWorkshopMap(char[] sMap, int iMapBuf)
 	ReplaceString(sCurMap, sizeof(sCurMap), "workshop/", "", false);
 	ExplodeString(sCurMap, "/", sMapSplit, 2, 64);
 	
-	strcopy(sMap, iMapBuf, sMapSplit[1]);
+	strcopy(sMap, iMapBufferSize, sMapSplit[1]);
 }
 
 // Getting the number of players that aren't bots.
