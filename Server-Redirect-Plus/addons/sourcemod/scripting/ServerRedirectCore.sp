@@ -136,6 +136,9 @@ enum
 	UPDATE_SERVER_START
 }
 
+// Late Load
+bool g_bLateLoad;
+
 //=========[ INCLUDES ]=========//
 #include "ServerRedirectMenus.sp"
 #include "ServerRedirectAdvertisements.sp"
@@ -186,6 +189,15 @@ public void OnPluginStart()
 	
 	//========================[ Load Translations ]=====================//
 	LoadTranslations("server_redirect.phrases");
+	
+	// If this is a late load, fire the start up proccess right away.
+	if(g_bLateLoad)
+		PluginStartUpProccess();
+}
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+    g_bLateLoad = late;
 }
 
 // We are getting the Server info here because some things are invalid before,
@@ -195,14 +207,7 @@ public Action Event_ServerSpawn(Event event, const char[] name, bool dontBroadca
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- Event_ServerSpawn");
 		
-	// Load Settings from the config
-	LoadSettings();
-	
-	// Load the Server-List commands from the convar / config
-	LoadServerListCommands();
-	
-	// Loading the Database
-	LoadDB();
+	PluginStartUpProccess();
 }
 
 public void OnMapStart()
@@ -535,6 +540,18 @@ stock bool IsValidClient(int client, bool bAllowBots = false, bool bAllowDead = 
 	if (!(1 <= client <= MaxClients) || !IsClientInGame(client) || IsClientSourceTV(client) || IsClientReplay(client) || (IsFakeClient(client) && !bAllowBots) || (!bAllowDead && !IsPlayerAlive(client)))
 		return false;
 	return true;
+}
+
+void PluginStartUpProccess()
+{
+	// Load Settings from the config
+	LoadSettings();
+	
+	// Load the Server-List commands from the convar / config
+	LoadServerListCommands();
+	
+	// Loading the Database
+	LoadDB();
 }
 
 // Load Server Settings
