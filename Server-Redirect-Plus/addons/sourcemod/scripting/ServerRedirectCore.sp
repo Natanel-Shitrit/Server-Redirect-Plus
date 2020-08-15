@@ -29,8 +29,7 @@ Database DB = null;								// Database handle
 char Query[512];								// Query string for quering 
 
 //=======[ Update Timer ]=======//
-Handle g_hServerUpdateTimer = INVALID_HANDLE; 	// Update this server
-Handle g_hOtherServersUpdateTimer;				// Update other servers
+Handle g_hServerUpdateTimer = null;				// Update this server
 int g_iTimerCounter;							// Timer For Advertisements
 
 //==========[ Settings ]=========//
@@ -63,14 +62,14 @@ enum struct Advertisement
 	int iCoolDownTime;			// How long should this advertisement should be on cooldown (for 'deffrence check' advertisements)
 	int iAdvertisedTime;		// Used for calculating if the advertisement should post
 	int iPlayersRange[2]; 		// 0 - MIN | 1 - MAX
-	int iServerIDToAdvertise;	// Advertised Server
+	int iServerSteamAIDToAdvertise;	// Advertised Server
 	
 	char sMessageContent[512];	// Message to print
 	
 	bool bActive;				// If the advertisement is currently active
 }
 Advertisement g_advAdvertisements[MAX_ADVERTISEMENTS];	// All of the server advertisements
-Advertisement g_advToEdit;								// For editing / adding the advertisements
+Advertisement g_advToEdit;								// For editing / adding advertisements
 
 //=======[ ADV TYPE ENUM ]======//
 enum
@@ -98,11 +97,11 @@ enum
 //======[ UPDATE ADV ENUM ]=====//
 enum
 {
-	UPDATE_NOTHING = -1	,	// Updating nothing
-	UPDATE_LOOP_TIME 	,	// Updating Loop time
-	UPDATE_COOLDOWN_TIME,	// Updating Cooldown time
-	UPDATE_PLAYER_RANGE ,	// Updating player range
-	UPDATE_ADV_MESSAGE 		// Updating message string
+	UPDATE_NOTHING = -1	,
+	UPDATE_LOOP_TIME 	,
+	UPDATE_COOLDOWN_TIME,
+	UPDATE_PLAYER_RANGE ,
+	UPDATE_ADV_MESSAGE
 }
 int g_iUpdateAdvProprietary[MAXPLAYERS + 1] =  { UPDATE_NOTHING, ... };
 
@@ -118,20 +117,29 @@ enum struct Server
 	int iServerIP32;
 	int iServerPort;
 	int iMaxPlayers;
-	int iServerID;
+	int iServerSteamAID;
+	int iServerBackupID;
 	
 	bool bShowInServerList;
 	bool bServerStatus;
 	bool bHiddenSlots;
 	bool bIncludeBots;
 }
-Server g_srCurrentServer;
+Server g_srThisServer;
 Server g_srOtherServers[MAX_SERVERS];
+
+//====[ SERVER SEARCH ENUM ]====//
+enum
+{
+	SERVER_SEARCH_BY_STEAM_ID = 0,
+	SERVER_SEARCH_BY_BACKUP_ID
+}
 
 //======[ DB UPDATE ENUM ]======//
 enum
 {
-	UPDATE_SERVER_PLAYERS, 
+	UPDATE_SERVER_STEAM_ID,
+	UPDATE_SERVER_PLAYERS,
 	UPDATE_SERVER_STATUS, 
 	UPDATE_SERVER_START
 }
@@ -160,24 +168,17 @@ public void OnPluginStart()
 	// NOTE: You can remove this but i can't guarantee that it will work in other games.
 	if (GetEngineVersion() != Engine_CSGO)
 		SetFailState("%s This plugin is for CSGO only.", PREFIX_NO_COLOR);
-	
+		
 	LogMessage("Plugin Started.");
 	
 	rgCountStrings = CompileRegex(REGEX_COUNT_STRINGS);
 	//==============================[ HOOKS ]===========================//
 	HookEvent("server_spawn"	, Event_ServerSpawn		, EventHookMode_Post);
-	HookEvent("server_shutdown"	, Event_ServerShutDown	, EventHookMode_Pre);
-	
-	//==========================[ ADMIN COMMANDS ]======================//
-	RegAdminCmd("sm_editsradv", Command_EditServerRedirectAdvertisements, ADMFLAG_ROOT, "Edit server Advertisements");
 	
 	//==========================[ Console-Vars ]========================//
 	g_cvUpdateOtherServersInterval 	= CreateConVar("server_redirect_other_servers_update_interval"	, "20.0", "The number of seconds between other servers update."											, _, true, 5.0, true, 600.0	);
 	g_cvUpdateServerInterval 		= CreateConVar("server_redirect_server_update_interval"			, "20.0", "The number of seconds the plugin will wait before updating player count in the SQL server." 	, _, true, 0.0, true, 600.0	);
 	g_cvPrintDebug 					= CreateConVar("server_redirect_debug_mode"						, "0"	, "Whether or not to print debug messages in server console"									, _, true, 0.0, true, 1.0	);
-	
-	//========================[ CVAR Change Hooks ]=====================//
-	g_cvUpdateOtherServersInterval.AddChangeHook(OnCvarChange);
 	
 	//=========================[ AutoExec Config ]======================//
 	AutoExecConfig(true);
@@ -219,137 +220,154 @@ public void OnMapStart()
 	GetServerInfo();
 }
 
-// OnClientConnected & OnClientDisconnect_Post Will start the Server-Update timer if it's not already running.
+// OnClientPostAdminCheck Will start the Server-Update timer if it's not already running.
 public void OnClientPostAdminCheck(int client)
 {
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- OnClientConnected | int client =  %d", client);
+		LogMessage(" <-- OnClientPostAdminCheck | int client =  %d", client);
 	
-	// If the user doesn't want bots, don't enter here.
-	if (!IsFakeClient(client) || g_srCurrentServer.bIncludeBots)
+	// Check if the client is a bot and if the server doesn't want to take bots into account (continue if the client is not fake)
+	// Yes: Starting the update Player-Count timer.
+	if (!IsFakeClient(client) || g_srThisServer.bIncludeBots)
 	{
-		if (g_cvPrintDebug.BoolValue)
-			LogMessage("%N is valid (bots: %b)", client, g_srCurrentServer.bIncludeBots);
-		
-		// Starting the update timer.
 		StartUpdateTimer();
 		
 		if (g_cvPrintDebug.BoolValue)
-			LogMessage("Client connected, starting timer");
-		
+			LogMessage("Next update will be in %d seconds.", g_cvUpdateServerInterval.IntValue);
 	}
-	else if (g_cvPrintDebug.BoolValue)
-		LogMessage("%N isn't valid (bots: %b)", client, g_srCurrentServer.bIncludeBots);
 }
 
-// OnClientConnected & OnClientDisconnect Will start the Server-Update timer if it's not already running.
+// OnClientDisconnect Will start the Server-Update timer if it's not already running.
 public void OnClientDisconnect(int client)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- OnClientDisconnect | int client =  %d", client);
 	
-	// If the user doesn't want bots, don't enter here.
-	if (!IsFakeClient(client) || g_srCurrentServer.bIncludeBots)
+	// Check if the client is a bot and if the server doesn't want to take bots into account (continue if the client is not fake)
+	// Yes: Starting the update Player-Count timer.
+	if (!IsFakeClient(client) || g_srThisServer.bIncludeBots)
 	{
-		// Get the client count
-		g_srCurrentServer.iNumOfPlayers = GetClientCountEx(g_srCurrentServer.bIncludeBots);
+		// Get the server Player-Count.
+		g_srThisServer.iNumOfPlayers = GetClientCountEx(g_srThisServer.bIncludeBots) - 1;
 		
-		// If this client wasn't the last player, start the update timer.
-		if (g_srCurrentServer.iNumOfPlayers != 0)
+		if (g_cvPrintDebug.BoolValue)
+				LogMessage("Number of remaining clients - %d", g_srThisServer.iNumOfPlayers);
+		
+		// Check If there are players in the server:
+		// YES:	start the Player-Count timer.
+		// NO:	Update the Player-Count right away. (all of the players left)
+		if(!g_srThisServer.iNumOfPlayers)
 		{
-			if (g_cvPrintDebug.BoolValue)
-				LogMessage("Client disconnected, starting timer");
-			
 			StartUpdateTimer();
-		}
-		else // If it was the last player update the player-count right away.
-		{
-			if (g_cvPrintDebug.BoolValue)
-				LogMessage("Last player disconnected, killing timer and updating");
 			
-			// FIX for server hibernation
-			if (g_hServerUpdateTimer != INVALID_HANDLE)
-			{
-				KillTimer(g_hServerUpdateTimer);
-				g_hServerUpdateTimer = INVALID_HANDLE;
-			}
+			if (g_cvPrintDebug.BoolValue)
+				LogMessage("Next update will be in %d seconds.", (g_srThisServer.iNumOfPlayers != 0) ? g_cvUpdateServerInterval.IntValue : 0);
+		}
+		else
+		{
 			UpdateServer(UPDATE_SERVER_PLAYERS);
+			
+			// Stop the update timer if it's running
+			if (!g_hServerUpdateTimer)
+				delete g_hServerUpdateTimer;
 		}
 	}
 }
 
-// Updating the needed stuff when Con-Var is getting changed. //
-public void OnCvarChange(ConVar cVar, char[] oldValue, char[] newValue)
-{
-	char sConVarName[64];
-	g_cvUpdateOtherServersInterval.GetName(sConVarName, sizeof(sConVarName));
-	
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- OnCvarChange | cVar - %s, oldValue - %s, newValue - %s", sConVarName, oldValue, newValue);
-	
-	// Kill the old timer, we don't need him anymore.
-	KillTimer(g_hOtherServersUpdateTimer);
-	
-	// Start a new timer with the updated interval.
-	g_hOtherServersUpdateTimer = CreateTimer(StringToFloat(newValue), Timer_UpdateOtherServers, _, TIMER_REPEAT);
-	
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage("Started OtherServersUpdateTimer (%.2f)", StringToFloat(newValue));
-}
-
-// Updating the Server-Status in the SQL server before shut-down.
-public Action Event_ServerShutDown(Event event, const char[] name, bool dontBroadcast)
-{
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- Event_ServerShutDown");
-	
-	// If the plugin is getting unloaded, probably the server is off so we want to update the server status in the database.
-	g_srCurrentServer.bServerStatus = false;
-	UpdateServer(UPDATE_SERVER_STATUS);
-}
-
+// If the plugin is getting unloaded, probably the server is off so we want to update the server status in the database.
 // Updating the Server-Status in the SQL server before plugin unload.
 public void OnPluginEnd()
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- OnPluginEnd");
 	
-	// If the plugin is getting unloaded, probably the server is off so we want to update the server status in the database.
-	g_srCurrentServer.bServerStatus = false;
-	UpdateServer(UPDATE_SERVER_STATUS);
+	// Check if the server has a valid Backup-ID:
+	// YES: Don't delete the server. Just make it offline.
+	// NO:	Delete it from the database now. (we can't be sure we will find the server when it's back online)
+	if(g_srThisServer.iServerBackupID > 0)
+	{
+		g_srThisServer.bServerStatus = false;
+		UpdateServer(UPDATE_SERVER_STATUS);
+	}
+	else
+	{
+		Format(Query, sizeof(Query), "DELETE FROM `server_redirect_servers` WHERE `server_steam_id` = %d", g_srThisServer.iServerSteamAID);
+		DB.Query(T_FakeFastQuery, Query, _, DBPrio_High);
+	}
 }
 
 //==================================[ TIMERS ]==============================//
+
+// Main Timer for the Advertisements and updating the player count.
+Action Timer_Loop(Handle hTimer)
+{
+	// If there are no players in the server, don't bother advertising or updating other servers. Because no one can use it / see it.
+	if (!g_srThisServer.iNumOfPlayers)
+		return Plugin_Continue;
+	
+	++g_iTimerCounter;
+	
+	// Every X seconds, update all other servers.
+	if(g_iTimerCounter % g_cvUpdateOtherServersInterval.IntValue == 0)
+		LoadServers();
+	
+	// If advertisements are enabled, try to find advertisements to post.
+	if(g_bAdvertisementsAreEnabled)
+	{
+		// Loop throw all the advertisements (all valid advertisements).
+		for (int iCurrentAdvertisement = 0; iCurrentAdvertisement < MAX_ADVERTISEMENTS; iCurrentAdvertisement++)
+		{
+			// Get the advertisement repeat time.
+			int iAdvertisementRepeatTime = g_advAdvertisements[iCurrentAdvertisement].iRepeatTime;
+			
+			// If this advertisement is invalid, everything after it would be the same because we are loading the all of the advertisements to the start of the array.
+			if(iAdvertisementRepeatTime == ADVERTISEMENT_INVALID)
+				break;
+			
+			// If the advertisement isn't a LOOP type, continue to the next one
+			if(iAdvertisementRepeatTime < ADVERTISEMENT_LOOP)
+				continue;
+			
+			// If this is the time to post the advertisement, go for it.
+			if(g_iTimerCounter % iAdvertisementRepeatTime == 0)
+				PostAdvertisement(g_advAdvertisements[iCurrentAdvertisement].iServerSteamAIDToAdvertise, ADVERTISEMENT_LOOP, iCurrentAdvertisement);
+		}
+	}
+	
+	return Plugin_Continue;
+}
+
 // After the Update-Interval time has passed, updae the server.
-public Action Timer_UpdateServerInDatabase(Handle timer)
+Action Timer_UpdateServerInDatabase(Handle timer)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- Timer_UpdateServerInDatabase");
 	
-	// Get Client-Count
-	g_srCurrentServer.iNumOfPlayers = GetClientCountEx(g_srCurrentServer.bIncludeBots);
-	
 	// Update on the database
 	UpdateServer(UPDATE_SERVER_PLAYERS);
 	
-	// Set the timer back to INVALID_HANDLE
-	g_hServerUpdateTimer = INVALID_HANDLE;
+	// Set the timer back to null.
+	g_hServerUpdateTimer = null;
 }
 
 //==================================[ DB-STUFF ]==============================//
 // Loading the Database config from sourcemod/configs/databases.cfg, checking if the table existes and if not creating a new one.
-stock void LoadDB()
+void LoadDB()
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadDB");
 	
-	// Connect to the database
-	
+	// Check if the Database handle is null (not connected to the database)
+	// YES: Connect to the database.
+	// NO:	Just Continue without connecting to the database again.
 	if(DB == null)
 	{
 		if (g_cvPrintDebug.BoolValue)
 			LogMessage("Starting Full Database load");
 		
+		// Check if the comfig exists in the 'databases.cfg' config.
+		// YES: Connect to the database.
+		// NO:	Stop the plugin and throw an error.
 		if (SQL_CheckConfig("ServerRedirect"))
 			Database.Connect(T_OnDBConnected, "ServerRedirect");
 		else
@@ -358,18 +376,22 @@ stock void LoadDB()
 	else
 	{
 		if (g_cvPrintDebug.BoolValue)
-			LogMessage("Already got Database a connection, just updating the server.");
+			LogMessage("Already got a Database connection, just updating the server.");
 		
-		UpdateServerInfo();
+		// Find the server in the database.
+		FindServer();
 	}
 }
 
 // When we got a response from the db and we either connected or not.
-public void T_OnDBConnected(Database dbMain, const char[] sError, any data)
+void T_OnDBConnected(Database dbMain, const char[] sError, any data)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- T_OnDBConnected");
 	
+	// Check if the database handle we got is null (invalid connection)
+	// YES:	Stop the plugin.
+	// NO: Save the connection and create the servers database table.
 	if (dbMain == null) // Oops, something went wrong :S
 		SetFailState("%s Cannot Connect To MySQL Server! | Error: %s", PREFIX_NO_COLOR, sError);
 	else
@@ -378,71 +400,76 @@ public void T_OnDBConnected(Database dbMain, const char[] sError, any data)
 		DB = dbMain;
 		
 		// Create Tables
-		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS server_redirect_servers (`id` INT NOT NULL AUTO_INCREMENT, `server_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_category` VARCHAR(64) NOT NULL, `server_ip` INT NOT NULL DEFAULT '-1', `server_port` INT NOT NULL DEFAULT '0', `server_status` INT NOT NULL DEFAULT '0', `server_visible` INT NOT NULL DEFAULT '1', `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL DEFAULT '0', `reserved_slots` INT NOT NULL DEFAULT '0', `hidden_slots` INT(1) NOT NULL DEFAULT '0', `max_players` INT NOT NULL DEFAULT '0', `bots_included` INT NOT NULL DEFAULT '0', `unix_lastupdate` TIMESTAMP on update CURRENT_TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `timeout_time` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), UNIQUE(`server_id`))", _, DBPrio_High);
-		CreateAdvertisementsTable();
+		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS `server_redirect_servers` (`id` INT NOT NULL AUTO_INCREMENT, `server_backup_id` INT NOT NULL, `server_steam_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_category` VARCHAR(64) NOT NULL, `server_ip` INT NOT NULL DEFAULT '-1', `server_port` INT NOT NULL DEFAULT '0', `server_status` INT NOT NULL DEFAULT '0', `server_visible` INT NOT NULL DEFAULT '1', `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL DEFAULT '0', `reserved_slots` INT NOT NULL DEFAULT '0', `hidden_slots` INT(1) NOT NULL DEFAULT '0', `max_players` INT NOT NULL DEFAULT '0', `bots_included` INT NOT NULL DEFAULT '0', `unix_lastupdate` TIMESTAMP on update CURRENT_TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `timeout_time` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), UNIQUE(`server_steam_id`))", _, DBPrio_High);
 	}
 }
 
 // Now the database is ready and we have a valid table to work with.
-public void T_OnDatabaseReady(Handle owner, Handle hQuery, const char[] sError, any data)
+void T_OnDatabaseReady(Handle owner, Handle hQuery, const char[] sError, any data)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- T_OnDatabaseReady");
 	
 	if (hQuery != INVALID_HANDLE)
 	{
-		// Send info to the database
-		UpdateServerInfo();
-		
-		// Load all other servers
-		LoadServers();
-		
-		if (g_cvPrintDebug.BoolValue)
-			LogMessage("Started g_hOtherServersUpdateTimer (%.2f)", g_cvUpdateOtherServersInterval.FloatValue);
-			
-		g_hOtherServersUpdateTimer = CreateTimer(g_cvUpdateOtherServersInterval.FloatValue, Timer_UpdateOtherServers, _, TIMER_REPEAT);
+		// Find the server in the database.
+		FindServer();
 	}
 	else
 		LogError("Error in T_OnDatabaseReady: %s", sError);
 }
 
 // Updating the server information based of the sent parameter.
-stock void UpdateServer(int iWhatToUpdate, DBPriority dbPriority = DBPrio_Normal)
+void UpdateServer(int iWhatToUpdate, DBPriority dbPriority = DBPrio_Normal)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- UpdateServer | iWhatToUpdate = %d", iWhatToUpdate);
 	
+	// TODO: Easy formatting, testing needed:
+	// Each UPDATE_TYPE will have a string and will be formatted in this template:
+	//Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET {CHANGE} WHERE `server_steam_id` = %d")
+	
 	switch (iWhatToUpdate)
 	{
+		case UPDATE_SERVER_STEAM_ID:
+		{
+			Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_steam_id` = %d WHERE `server_backup_id` = %d",
+				g_srThisServer.iServerSteamAID,
+				g_srThisServer.iServerBackupID
+			);
+		}
 		case UPDATE_SERVER_PLAYERS:
 		{
-			Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `number_of_players` = %d WHERE `server_id` = %d",
-			g_srCurrentServer.iNumOfPlayers,
-			g_srCurrentServer.iServerID
+			// Get Client-Count
+			g_srThisServer.iNumOfPlayers = GetClientCountEx(g_srThisServer.bIncludeBots);
+			
+			Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `number_of_players` = %d WHERE `server_steam_id` = %d",
+				g_srThisServer.iNumOfPlayers,
+				g_srThisServer.iServerSteamAID
 			);
 		}
 		case UPDATE_SERVER_STATUS:
 		{
-			Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_status` = %d WHERE `server_id` = %d",
-			g_srCurrentServer.bServerStatus,
-			g_srCurrentServer.iServerID
+			Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_status` = %d WHERE `server_steam_id` = %d",
+				g_srThisServer.bServerStatus,
+				g_srThisServer.iServerSteamAID
 			);
 		}
 		case UPDATE_SERVER_START:
 		{
-			DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_name` = '%s', `server_ip` = %d, `server_port` = %d, `server_status` = %d, `server_visible` = %d, `max_players` = %d, `reserved_slots` = %d, `hidden_slots` = %b, `bots_included` = %b, `server_map` = '%s', `timeout_time` = %d WHERE `server_id` = %d",
-			g_srCurrentServer.sServerName,
-			g_srCurrentServer.iServerIP32,
-			g_srCurrentServer.iServerPort,
-			g_srCurrentServer.bServerStatus,
-			g_srCurrentServer.bShowInServerList,
-			g_srCurrentServer.iMaxPlayers,
-			g_srCurrentServer.iReservedSlots,
-			g_srCurrentServer.bHiddenSlots,
-			g_srCurrentServer.bIncludeBots,
-			g_srCurrentServer.sServerMap,
-			g_iServerTimeOut,
-			g_srCurrentServer.iServerID
+			DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_name` = '%s', `server_ip` = %d, `server_port` = %d, `server_status` = %d, `server_visible` = %d, `max_players` = %d, `reserved_slots` = %d, `hidden_slots` = %b, `bots_included` = %b, `server_map` = '%s', `timeout_time` = %d WHERE `server_steam_id` = %d",
+				g_srThisServer.sServerName,
+				g_srThisServer.iServerIP32,
+				g_srThisServer.iServerPort,
+				g_srThisServer.bServerStatus,
+				g_srThisServer.bShowInServerList,
+				g_srThisServer.iMaxPlayers,
+				g_srThisServer.iReservedSlots,
+				g_srThisServer.bHiddenSlots,
+				g_srThisServer.bIncludeBots,
+				g_srThisServer.sServerMap,
+				g_iServerTimeOut,
+				g_srThisServer.iServerSteamAID
 			);
 		}
 	}
@@ -453,26 +480,27 @@ stock void UpdateServer(int iWhatToUpdate, DBPriority dbPriority = DBPrio_Normal
 }
 
 // Registering a new server in the Database server.
-stock void RegisterServer()
+void RegisterServer()
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- RegisterServer");
 	
-	DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_servers`(`server_id`, `server_name`, `server_category`, `server_ip`, `server_port`, `server_status`, `server_map`, `number_of_players`, `max_players`, `reserved_slots`, `hidden_slots`, `server_visible`, `timeout_time`) VALUES (%d, '%s', '%s', %d, %d, %d, '%s', %d, %d, %d, %d, %b, %d)", 
-		g_srCurrentServer.iServerID, 
-		g_srCurrentServer.sServerName, 
-		g_srCurrentServer.sServerCategory, 
-		g_srCurrentServer.iServerIP32, 
-		g_srCurrentServer.iServerPort, 
-		g_srCurrentServer.bServerStatus, 
-		g_srCurrentServer.sServerMap, 
-		g_srCurrentServer.iNumOfPlayers, 
-		g_srCurrentServer.iMaxPlayers,
-		g_srCurrentServer.iReservedSlots,
-		g_srCurrentServer.bHiddenSlots,
-		g_srCurrentServer.bShowInServerList,
+	DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_servers` (`server_backup_id`, `server_steam_id`, `server_name`, `server_category`, `server_ip`, `server_port`, `server_status`, `server_map`, `number_of_players`, `max_players`, `reserved_slots`, `hidden_slots`, `server_visible`, `timeout_time`) VALUES (%d, %d, '%s', '%s', %d, %d, %d, '%s', %d, %d, %d, %d, %b, %d)", 
+		g_srThisServer.iServerBackupID,
+		g_srThisServer.iServerSteamAID,
+		g_srThisServer.sServerName, 
+		g_srThisServer.sServerCategory, 
+		g_srThisServer.iServerIP32, 
+		g_srThisServer.iServerPort, 
+		g_srThisServer.bServerStatus, 
+		g_srThisServer.sServerMap, 
+		g_srThisServer.iNumOfPlayers, 
+		g_srThisServer.iMaxPlayers,
+		g_srThisServer.iReservedSlots,
+		g_srThisServer.bHiddenSlots,
+		g_srThisServer.bShowInServerList,
 		g_iServerTimeOut
-		);
+	);
 	
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage("Register Query: %s", Query);
@@ -481,46 +509,71 @@ stock void RegisterServer()
 }
 
 // Updating the server info in the Database server.
-stock void UpdateServerInfo()
+void FindServer(int iSearchBy = SERVER_SEARCH_BY_STEAM_ID)
 {
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- UpdateServerInfo");
+		LogMessage(" <-- FindServer | iSearchBy - %d", iSearchBy);
+	
+	Format(Query, sizeof(Query), "SELECT `server_steam_id` FROM `server_redirect_servers` WHERE `%s` = %d",
+		(!iSearchBy) ? "server_steam_id" : "server_backup_id",
+		(!iSearchBy) ? g_srThisServer.iServerSteamAID : g_srThisServer.iServerBackupID);
 		
-	Format(Query, sizeof(Query), "SELECT * FROM `server_redirect_servers` WHERE `server_id` = %d", g_srCurrentServer.iServerID);
-	
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage("UpdateServerInfo Query: %s", Query);
+		LogMessage("FindServer Query: %s", Query);
 	
-	DB.Query(T_OnServerSearchReceived, Query, _, DBPrio_High);
+	DB.Query(T_OnServerSearchResultsReceived, Query, iSearchBy, DBPrio_High);
 }
 
-void T_OnServerSearchReceived(Handle owner, Handle hQuery, const char[] sError, any data)
+void T_OnServerSearchResultsReceived(Handle owner, Handle hQuery, const char[] sError, any iSearchBy)
 {
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- T_OnServerSearchReceived");
+		LogMessage(" <-- T_OnServerSearchResultsReceived");
 	
 	if (hQuery != INVALID_HANDLE)
 	{
-		// If the server exists:
+		// If the row is fetched, that means we found the server. No rows = server doesn't exit in the DB.
 		if(SQL_FetchRow(hQuery))
 		{
 			if (g_cvPrintDebug.BoolValue)
-				LogMessage("Found Server: ID - %d", g_srCurrentServer.iServerID);
+				LogMessage("Found Server %s-ID - %d", (iSearchBy == SERVER_SEARCH_BY_STEAM_ID) ? "Steam" : "Backup", (iSearchBy == SERVER_SEARCH_BY_STEAM_ID) ? g_srThisServer.iServerSteamAID : g_srThisServer.iServerBackupID);
+			
+			// If we found the server Backup-ID after not finding by Steam-ID, update the Steam-ID
+			if(iSearchBy == SERVER_SEARCH_BY_BACKUP_ID)
+			{
+				// Update advertisements (Change old Server Steam-ID to the new one)
+				int iOldServerSteamID = SQL_FetchInt(hQuery, 0);
+				UpdateAdvertisementsSteamID(iOldServerSteamID);
+				
+				// Update the new Steam-ID
+				UpdateServer(UPDATE_SERVER_STEAM_ID, DBPrio_High);
+			}
 			
 			// Update the server.
 			UpdateServer(UPDATE_SERVER_START, DBPrio_Normal);
 		}
-		else // else, the server doesn't exist:
+		else 
 		{
-			if (g_cvPrintDebug.BoolValue)
-				LogMessage("Couldn't find any servers with this ID (%d), Registering a new server.", g_srCurrentServer.iServerID);
-			
-			// Registering the server with the Server-ID.
-			RegisterServer();
+			// If the server wansn't found with the SteamAID and there is a valid Backup-ID, try recovering it.
+			if(iSearchBy == SERVER_SEARCH_BY_STEAM_ID && g_srThisServer.iServerBackupID > 0)
+			{
+				if (g_cvPrintDebug.BoolValue)
+					LogMessage("Couldn't find any servers with this Steam-ID (%d), Searching for the Server Backup-ID", g_srThisServer.iServerSteamAID);
+				
+				// Try to find the server with the Backup-ID
+				FindServer(SERVER_SEARCH_BY_BACKUP_ID);
+				
+				// Don't Load all other servers yet.
+				return;
+			}
+			else // Register the server with the Server-ID.
+				RegisterServer();
 		}
+		
+		// Load all other servers
+		LoadServers(true);
 	}
 	else
-		LogError("Error in T_OnServerSearchReceived: %s", sError);
+		SetFailState("Something is wrong with the Database, Error in T_OnServerSearchReceived: %s", sError);
 }
 
 // We only need to send the query, nothing to receive.
@@ -534,14 +587,6 @@ void T_FakeFastQuery(Handle owner, Handle hQuery, const char[] sError, any data)
 }
 
 //==================================[ HELPING ]==============================//
-// Checking if the sent client is valid based of the parmeters sent and other other functions.
-stock bool IsValidClient(int client, bool bAllowBots = false, bool bAllowDead = true)
-{
-	if (!(1 <= client <= MaxClients) || !IsClientInGame(client) || IsClientSourceTV(client) || IsClientReplay(client) || (IsFakeClient(client) && !bAllowBots) || (!bAllowDead && !IsPlayerAlive(client)))
-		return false;
-	return true;
-}
-
 void PluginStartUpProccess()
 {
 	// Load Settings from the config
@@ -552,10 +597,13 @@ void PluginStartUpProccess()
 	
 	// Loading the Database
 	LoadDB();
+	
+	// Starting the loop timer
+	CreateTimer(1.0, Timer_Loop, _, TIMER_REPEAT);
 }
 
 // Load Server Settings
-stock void LoadSettings()
+void LoadSettings()
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadSettings");
@@ -570,54 +618,55 @@ stock void LoadSettings()
 		SetFailState("%s Couldn't load plugin config.", PREFIX_NO_COLOR);
 	
 	// Get the ServerID
-	g_srCurrentServer.iServerID = kvSettings.GetNum("ServerID", 0);
+	g_srThisServer.iServerBackupID = kvSettings.GetNum("ServerBackupID", 0);
 	
-	// If the ServerID is invalid, Get the server Steam-ID.
-	if(g_srCurrentServer.iServerID < 1)
-	{
-		if (g_cvPrintDebug.BoolValue)
-			LogMessage("Invalid ServerID (%d) from the config, using Server Steam Accound-ID.", g_srCurrentServer.iServerID);
+	g_srThisServer.iServerSteamAID = GetServerSteamAccountId();
 		
-		// This is not the best way but 
-		g_srCurrentServer.iServerID = GetServerSteamAccountId();
-		
-		if (g_cvPrintDebug.BoolValue)
-			LogMessage("Server Steam Accound-ID: %d", g_srCurrentServer.iServerID);
-		
-		// If we don't have the server steam account id and we didn't got a ServerID ask for a manual configuration.
-		if(g_srCurrentServer.iServerID == 0)
-			SetFailState("Couldn't get the Server Steam Account ID, Please manually configure ServerID in the plugin config");
-	}
+	if (g_cvPrintDebug.BoolValue)
+		LogMessage("Server Steam Accound-ID: %d", g_srThisServer.iServerSteamAID);
+	
+	// If we don't have the server steam account id and we didn't got a ServerID ask for a manual configuration.
+	if(g_srThisServer.iServerSteamAID == 0)
+		SetFailState("Couldn't get the Server Steam Account ID, please make sure the server is using a valid token!");
 	
 	// Get the rest of the settings if everything is ok
-	g_srCurrentServer.bIncludeBots 		= view_as<bool>(kvSettings.GetNum("ShowBots"				, 0));
-	g_srCurrentServer.bShowInServerList = view_as<bool>(kvSettings.GetNum("ShowSeverInServerList"	, 1));
-	
-	g_bAdvertisementsAreEnabled 	= view_as<bool>(kvSettings.GetNum("EnableAdvertisements"	, 1));
-	g_bAdvertiseOfflineServers 	= view_as<bool>(kvSettings.GetNum("AdvertiseOfflineServers"	, 0));
+	g_srThisServer.bShowInServerList = view_as<bool>(kvSettings.GetNum("ShowSeverInServerList"	, 1));
+	g_srThisServer.bIncludeBots 		= view_as<bool>(kvSettings.GetNum("ShowBots"				, 0));
+	g_bAdvertisementsAreEnabled 		= view_as<bool>(kvSettings.GetNum("EnableAdvertisements"	, 1));
+	g_bAdvertiseOfflineServers 			= view_as<bool>(kvSettings.GetNum("AdvertiseOfflineServers"	, 0));
 	
 	g_iServerTimeOut = kvSettings.GetNum("ServerTimeOut", 1440);
 	
 	kvSettings.GetString("MenuFormat"			, g_sMenuFormat						, sizeof(g_sMenuFormat)						);
 	kvSettings.GetString("PrefixRemover"		, g_sPrefixRemover					, sizeof(g_sPrefixRemover)					);
 	kvSettings.GetString("ServerListCommands"	, g_sServerListCommands				, sizeof(g_sServerListCommands)				);
-	kvSettings.GetString("ServerName"			, g_srCurrentServer.sServerName		, sizeof(g_srCurrentServer.sServerName)		);
-	kvSettings.GetString("ServerCategory"		, g_srCurrentServer.sServerCategory	, sizeof(g_srCurrentServer.sServerCategory)	);
+	kvSettings.GetString("ServerName"			, g_srThisServer.sServerName		, sizeof(g_srThisServer.sServerName)		);
+	kvSettings.GetString("ServerCategory"		, g_srThisServer.sServerCategory	, sizeof(g_srThisServer.sServerCategory)	);
 	
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage("Settings Loaded:\nServerID: %d\nMenuFormat: %s\nServerListCommands: %s\nServerName: %s\nServerCategory: %s\nShowBots: %d\nShowSeverInServerList: %d",
-		g_srCurrentServer.iServerID,
-		g_sMenuFormat,
-		g_sServerListCommands,
-		g_srCurrentServer.sServerName,
-		g_srCurrentServer.sServerCategory,
-		g_srCurrentServer.bIncludeBots,
-		g_bShowServerOnServerList
+		LogMessage("Settings Loaded:\nServerBackupID: %d\nMenuFormat: %s\nServerListCommands: %s\nServerName: %s\nServerCategory: %s\nShowBots: %d\nShowSeverInServerList: %d",
+			g_srThisServer.iServerSteamAID,
+			g_sMenuFormat,
+			g_sServerListCommands,
+			g_srThisServer.sServerName,
+			g_srThisServer.sServerCategory,
+			g_srThisServer.bIncludeBots,
+			g_bShowServerOnServerList
 		);
 }
 
+// Starting the server update timer if it's not already running.
+void StartUpdateTimer()
+{
+	if (g_cvPrintDebug.BoolValue)
+		LogMessage(" <-- StartUpdateTimer | ServerUpdateTimer %s", g_hServerUpdateTimer ? "Already running" : "Started");
+	
+	if (!g_hServerUpdateTimer)
+		g_hServerUpdateTimer = CreateTimer(g_cvUpdateServerInterval.FloatValue, Timer_UpdateServerInDatabase);
+}
+
 // Load the commands for the Server-List
-stock void LoadServerListCommands()
+void LoadServerListCommands()
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadServerListCommands | Commands string - %s", g_sServerListCommands);
@@ -636,25 +685,8 @@ stock void LoadServerListCommands()
 	}
 }
 
-// Starting the server update timer if it's not already running.
-stock void StartUpdateTimer()
-{
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- StartUpdateTimer");
-	
-	if (!g_hServerUpdateTimer)
-	{
-		g_hServerUpdateTimer = CreateTimer(g_cvUpdateServerInterval.FloatValue, Timer_UpdateServerInDatabase);
-		
-		if (g_cvPrintDebug.BoolValue)
-			LogMessage("ServerUpdateTimer Started");
-	}
-	else if (g_cvPrintDebug.BoolValue)
-		LogMessage("ServerUpdateTimer didn't start because it's already running (Valid: %b)", !g_hServerUpdateTimer);
-}
-
 // Get the name of the workshop map.
-stock void GetCurrentWorkshopMap(char[] sMap, int iMapBufferSize)
+void GetCurrentWorkshopMap(char[] sMap, int iMapBufferSize)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- GetCurrentWorkshopMap | sMap - %s, iMapBufferSize - %d", sMap, iMapBufferSize);
@@ -670,7 +702,7 @@ stock void GetCurrentWorkshopMap(char[] sMap, int iMapBufferSize)
 }
 
 // Getting the number of players that aren't bots.
-stock int GetClientCountEx(bool bIncludeBots)
+int GetClientCountEx(bool bIncludeBots)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage("<-- GetClientCountEx | bIncludeBots - %d", bIncludeBots);
@@ -678,8 +710,8 @@ stock int GetClientCountEx(bool bIncludeBots)
 	int iClientCount = 0;
 	
 	for (int iCurrentClient = 1; iCurrentClient <= MaxClients; iCurrentClient++)
-	if (IsValidClient(iCurrentClient, bIncludeBots, true))
-		iClientCount++;
+		if (IsClientInGame(iCurrentClient) && (!IsFakeClient(iCurrentClient) || bIncludeBots))
+			iClientCount++;
 	
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage("%d real clients are in the server. (with%s bots)", iClientCount, bIncludeBots ? "" : "out");
@@ -688,9 +720,10 @@ stock int GetClientCountEx(bool bIncludeBots)
 }
 
 // Copying a string to it's destination and adding a '...' if the string isn't fully shown.
-stock int CopyStringWithDots(char[] sDest, int iDestLen, char[] sSource, int iSourceLen)
+int CopyStringWithDots(char[] sDest, int iDestLen, char[] sSource)
 {
 	strcopy(sDest, iDestLen, sSource);
+	
 	if(strlen(sSource) > iDestLen && iDestLen > 3)
 		strcopy(sDest[iDestLen - 4], iDestLen, "...");
 	
@@ -698,7 +731,7 @@ stock int CopyStringWithDots(char[] sDest, int iDestLen, char[] sSource, int iSo
 }
 
 // Getting the Server-IP32
-stock int GetServerIP32()
+int GetServerIP32()
 {
 	// Gets the server public IP
 	int iIPFull[4];
@@ -710,7 +743,7 @@ stock int GetServerIP32()
 		GetConVarString(g_cvNetPublicAdr, sIPv4, sizeof(sIPv4));
 		
 		char sIPFull[4][4];
-		ExplodeString(sIPv4, ".", sIPFull, 4, 4);
+		ExplodeString(sIPv4, ".", sIPFull, sizeof(sIPFull), sizeof(sIPFull[]));
 		
 		for (int iCurrentField = 0; iCurrentField < 4; iCurrentField++)
 			iIPFull[iCurrentField] = StringToInt(sIPFull[iCurrentField]);
@@ -724,65 +757,65 @@ stock int GetServerIP32()
 }
 
 // Getting the server info and storing it.
-stock void GetServerInfo()
+void GetServerInfo()
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- GetServerInfo");
 	
 	// If it's blank, grab the server hostname
-	if (StrEqual(g_srCurrentServer.sServerName, "", false))
+	if (StrEqual(g_srThisServer.sServerName, "", false))
 	{
 		if (g_cvPrintDebug.BoolValue)
 			LogMessage("Server name was empty. Getting the hostname.");
 		
-		GetConVarString(FindConVar("hostname"), g_srCurrentServer.sServerName, sizeof(g_srCurrentServer.sServerName));
+		GetConVarString(FindConVar("hostname"), g_srThisServer.sServerName, sizeof(g_srThisServer.sServerName));
 	}
 	
 	// Get server map
-	GetCurrentMap(g_srCurrentServer.sServerMap, sizeof(g_srCurrentServer.sServerMap));
+	GetCurrentMap(g_srThisServer.sServerMap, sizeof(g_srThisServer.sServerMap));
 	
 	// Get only the name of the map if it's a workshop map
-	if (StrContains(g_srCurrentServer.sServerMap, "workshop/", false) != -1)
-		GetCurrentWorkshopMap(g_srCurrentServer.sServerMap, sizeof(g_srCurrentServer.sServerMap));
+	if (StrContains(g_srThisServer.sServerMap, "workshop/", false) != -1)
+		GetCurrentWorkshopMap(g_srThisServer.sServerMap, sizeof(g_srThisServer.sServerMap));
 	
 	// After everything we couldn't get the IP32, so we have no point to continue
-	if((g_srCurrentServer.iServerIP32 = GetServerIP32()) == 0)
+	if((g_srThisServer.iServerIP32 = GetServerIP32()) == 0)
 		SetFailState("%s Couldn't get the server IP", PREFIX_NO_COLOR);
 	
 	// Get the server Max-Players
-	g_srCurrentServer.iMaxPlayers = GetMaxHumanPlayers();
+	g_srThisServer.iMaxPlayers = GetMaxHumanPlayers();
 	
 	// If reserved slots is used, lets take it to count.
 	if(g_cvReservedSlots)
-		g_srCurrentServer.iReservedSlots = g_cvReservedSlots.IntValue;
+		g_srThisServer.iReservedSlots = g_cvReservedSlots.IntValue;
 	
 	if(g_cvHiddenSlots)
-		g_srCurrentServer.bHiddenSlots = g_cvHiddenSlots.BoolValue;
+		g_srThisServer.bHiddenSlots = g_cvHiddenSlots.BoolValue;
 	
 	// Get the server Port
-	g_srCurrentServer.iServerPort = GetConVarInt(FindConVar("hostport"));
+	g_srThisServer.iServerPort = GetConVarInt(FindConVar("hostport"));
 	
 	// Get the server Player-Count
-	g_srCurrentServer.iNumOfPlayers = GetClientCountEx(g_srCurrentServer.bIncludeBots);
+	g_srThisServer.iNumOfPlayers = GetClientCountEx(g_srThisServer.bIncludeBots);
 	
 	// Set the server status to online.
-	g_srCurrentServer.bServerStatus = true;
+	g_srThisServer.bServerStatus = true;
 	
 	if (g_cvPrintDebug.BoolValue)
 	{
 		char iIP[4][4];
-		GetIPv4FromIP32(g_srCurrentServer.iServerIP32, iIP);
+		GetIPv4FromIP32(g_srThisServer.iServerIP32, iIP);
 		LogMessage("Name - %s\nCategory - %s\nIP32 - %d\nIP - %s.%s.%s.%s\nPort - %d\nMap - %s\nNumber of players - %d\nMax Players - %d\nshow server - %b", 
-			g_srCurrentServer.sServerName,
-			g_srCurrentServer.sServerCategory,
-			g_srCurrentServer.iServerIP32,
+			g_srThisServer.sServerName,
+			g_srThisServer.sServerCategory,
+			g_srThisServer.iServerIP32,
 			iIP[0], iIP[1], iIP[2], iIP[3],
-			g_srCurrentServer.iServerPort,
-			g_srCurrentServer.sServerMap,
-			g_srCurrentServer.iNumOfPlayers,
-			g_srCurrentServer.iMaxPlayers,
-			g_srCurrentServer.bShowInServerList
-			);
+			g_srThisServer.iServerPort,
+			g_srThisServer.sServerMap,
+			g_srThisServer.iNumOfPlayers,
+			g_srThisServer.iMaxPlayers,
+			g_srThisServer.bShowInServerList
+		);
 	}
 }
 
@@ -797,7 +830,7 @@ stock void GetServerInfo()
  * @param subString			Sub-String to check in str
  * @return					True if str starts with subString, false otherwise.
  */
-stock bool String_StartsWith(const char[] str, const char[] subString)
+bool String_StartsWith(const char[] str, const char[] subString)
 {
 	int n = 0;
 	while (subString[n] != '\0')
@@ -807,29 +840,6 @@ stock bool String_StartsWith(const char[] str, const char[] subString)
 			
 		n++;
 	}
-
-	return true;
-}
-
-/**
- * Checks if string str ends with subString.
- * 
- *
- * @param str				String to check
- * @param subString			Sub-String to check in str
- * @return					True if str ends with subString, false otherwise.
- */
-stock bool String_EndsWith(const char[] str, const char[] subString)
-{
-	int n_str = strlen(str) - 1;
-	int n_subString = strlen(subString) - 1;
-
-	if(n_str < n_subString)
-		return false;
-
-	while (n_str != 0 && n_subString != 0)
-		if (str[n_str--] != subString[n_subString--])
-			return false;
 
 	return true;
 }
@@ -859,6 +869,6 @@ stock bool String_EndsWith(const char[] str, const char[] subString)
 * 7. File is now lighter, removed the 'smlib' include and took only 2 things i needed
 * 8. Added reserve slot support, override command 'server_redirect_use_reserved_slots' or ROOT admin-flag can see reserved slots.
 * 9. FIX ServerList menu glitching out and not showing part of the servers / next / back buttons.
-*
+* 10. Too many connections to the DB server FIX :)
 *
 */

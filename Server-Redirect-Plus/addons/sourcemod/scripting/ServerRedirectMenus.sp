@@ -1,6 +1,7 @@
 enum
 {
-	SQL_FIELD_SERVER_ID = 1,
+	SQL_FIELD_SERVER_BACKUP_ID = 1,
+	SQL_FIELD_SERVER_STEAM_ID,
 	SQL_FIELD_SERVER_NAME,
 	SQL_FIELD_SERVER_CATEGORY,
 	SQL_FIELD_SERVER_IP,
@@ -28,7 +29,7 @@ public Plugin myinfo =
 };
 
 // SQL Callback for LoadServers()
-public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError, any data)
+void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError, any bFirstLoad)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- T_OnServersReceive");
@@ -42,7 +43,7 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 		int iCurrentServer;
 		for (iCurrentServer = 0; iCurrentServer < MAX_SERVERS && SQL_FetchRow(hQuery); iCurrentServer++)
 		{
-			g_srOtherServers[iCurrentServer].iServerID = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_ID);
+			g_srOtherServers[iCurrentServer].iServerSteamAID = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_STEAM_ID);
 			
 			int iServerTimeOut = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_TIMEOUT) * 60;
 			if(iServerTimeOut > 0)
@@ -54,7 +55,7 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 				{
 					bServerGotDeleted = true;
 					
-					Format(Query, sizeof(Query), "DELETE FROM `server_redirect_servers` WHERE `server_id` = %d", g_srOtherServers[iCurrentServer].iServerID);
+					Format(Query, sizeof(Query), "DELETE FROM `server_redirect_servers` WHERE `server_steam_id` = %d", g_srOtherServers[iCurrentServer].iServerSteamAID);
 					
 					if (g_cvPrintDebug.BoolValue)
 						LogMessage("Delete Server Query: %s", Query);
@@ -62,11 +63,12 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 					DB.Query(T_FakeFastQuery, Query, _, DBPrio_Low);
 					
 					if (g_cvPrintDebug.BoolValue)
-						LogMessage("Deleting Server (Server-ID - %d | Last update - %d | timeout time in sec - %d | time without update %d)",
-						g_srOtherServers[iCurrentServer].iServerID,
-						iServerLastUpdate,
-						iServerTimeOut,
-						iServerTimeWithoutUpdate);
+						LogMessage("Deleting Server (Server Steam ID - %d | Last update - %d | timeout time in sec - %d | time without update %d)",
+							g_srOtherServers[iCurrentServer].iServerSteamAID,
+							iServerLastUpdate,
+							iServerTimeOut,
+							iServerTimeWithoutUpdate
+						);
 					
 					iCurrentServer--;
 					continue;
@@ -93,45 +95,53 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 				g_srOtherServers[iCurrentServer].iNumOfPlayers 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_PLAYERS);
 				g_srOtherServers[iCurrentServer].iMaxPlayers 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_MAX_PLAYERS);
 				
-				if(g_bAdvertisementsAreEnabled)
+				char sOldMap[PLATFORM_MAX_PATH];
+				if (!StrEqual(g_srOtherServers[iCurrentServer].sServerMap, "", false))
+					strcopy(sOldMap, sizeof(sOldMap), g_srOtherServers[iCurrentServer].sServerMap);
+				
+				SQL_FetchString(hQuery, SQL_FIELD_SERVER_MAP, g_srOtherServers[iCurrentServer].sServerMap, sizeof(g_srOtherServers[].sServerMap));
+				
+				if(g_bAdvertisementsAreEnabled && !bFirstLoad)
 				{
-					int iServerAdvertisement = FindAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_PLAYERS_RANGE);
+					int iServerAdvertisement = FindAdvertisement(g_srOtherServers[iCurrentServer].iServerSteamAID, ADVERTISEMENT_PLAYERS_RANGE);
 				
-					if (iServerAdvertisement != -1 && g_advAdvertisements[iServerAdvertisement].iPlayersRange[0] < g_srOtherServers[iCurrentServer].iNumOfPlayers < g_advAdvertisements[iServerAdvertisement].iPlayersRange[1])
-						PostAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_PLAYERS_RANGE);
+					if (iServerAdvertisement != -1 && g_advAdvertisements[iServerAdvertisement].iPlayersRange[0] <= g_srOtherServers[iCurrentServer].iNumOfPlayers <= g_advAdvertisements[iServerAdvertisement].iPlayersRange[1])
+						PostAdvertisement(g_srOtherServers[iCurrentServer].iServerSteamAID, ADVERTISEMENT_PLAYERS_RANGE);
 					
-					char sOldMap[PLATFORM_MAX_PATH];
-					if (!StrEqual(g_srOtherServers[iCurrentServer].sServerMap, "", false))
-						strcopy(sOldMap, sizeof(sOldMap), g_srOtherServers[iCurrentServer].sServerMap);
-				
-					SQL_FetchString(hQuery, SQL_FIELD_SERVER_MAP, g_srOtherServers[iCurrentServer].sServerMap, sizeof(g_srOtherServers[].sServerMap));
-				
 					if (!StrEqual(sOldMap, g_srOtherServers[iCurrentServer].sServerMap))
-						PostAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_MAP);
+						PostAdvertisement(g_srOtherServers[iCurrentServer].iServerSteamAID, ADVERTISEMENT_MAP);
 				}
 			}
 			
 			if (g_cvPrintDebug.BoolValue)
-				LogMessage("[T_OnServersReceive -> LOOP(%d) -> IF] Server-ID %d (Status: %b | Show: %b): \nName: %s, Category: %s, Map: %s, IP32: %d, Port: %d, Number of players: %d, Max players: %d",
-				iCurrentServer,
-				g_srOtherServers[iCurrentServer].iServerID,
-				g_srOtherServers[iCurrentServer].bServerStatus,
-				g_srOtherServers[iCurrentServer].bShowInServerList,
-				g_srOtherServers[iCurrentServer].sServerName, 
-				g_srOtherServers[iCurrentServer].sServerCategory, 
-				g_srOtherServers[iCurrentServer].sServerMap, 
-				g_srOtherServers[iCurrentServer].iServerIP32, 
-				g_srOtherServers[iCurrentServer].iServerPort, 
-				g_srOtherServers[iCurrentServer].iNumOfPlayers, 
-				g_srOtherServers[iCurrentServer].iMaxPlayers);
+				LogMessage("[T_OnServersReceive -> LOOP(%d) -> IF] Server Steam ID %d (Status: %b | Show: %b): \nName: %s, Category: %s, Map: %s, IP32: %d, Port: %d, Number of players: %d, Max players: %d",
+					iCurrentServer,
+					g_srOtherServers[iCurrentServer].iServerSteamAID,
+					g_srOtherServers[iCurrentServer].bServerStatus,
+					g_srOtherServers[iCurrentServer].bShowInServerList,
+					g_srOtherServers[iCurrentServer].sServerName, 
+					g_srOtherServers[iCurrentServer].sServerCategory, 
+					g_srOtherServers[iCurrentServer].sServerMap, 
+					g_srOtherServers[iCurrentServer].iServerIP32, 
+					g_srOtherServers[iCurrentServer].iServerPort, 
+					g_srOtherServers[iCurrentServer].iNumOfPlayers, 
+					g_srOtherServers[iCurrentServer].iMaxPlayers
+				);
 			
 		}
-		// Clean the rest of the array so we won't show servers that got deleted in the database and still somewhere in the array we didn't touch.
-		CleanServersArray(iCurrentServer);
 		
-		if(g_bAdvertisementsAreEnabled && bServerGotDeleted)
-			LoadAdvertisements(false);
-		
+		if(!bFirstLoad)
+		{
+			// Clean the rest of the array so we won't show servers that got deleted in the database and still somewhere in the array we didn't touch.
+			CleanServersArray(iCurrentServer);
+			
+			// Reload Advertisements if a server got deleted.
+			if(g_bAdvertisementsAreEnabled && bServerGotDeleted)
+				LoadAdvertisements();
+		}
+		else // Create Advertisements Table on First-Load.
+			CreateAdvertisementsTable();
+			
 		if (g_cvPrintDebug.BoolValue && !iCurrentServer)
 			LogError("No servers found in DB.");
 		
@@ -140,25 +150,6 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 	}
 	else
 		LogError("T_OnServersReceive Error: %s", sError);
-}
-
-// Timer for other servers update
-public Action Timer_UpdateOtherServers(Handle timer)
-{
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- Timer_UpdateOtherServers");
-	
-	if (GetClientCountEx(false) != 0)
-	{
-		if (g_cvPrintDebug.BoolValue)
-			LogMessage("[Timer_UpdateOtherServers -> IF] Loading Servers");
-		
-		LoadServers();
-	}
-	else if (g_cvPrintDebug.BoolValue)
-		LogMessage("[Timer_UpdateOtherServers -> ELSE] Not loading servers because server is empty.");
-	
-	return Plugin_Continue;
 }
 
 //==================================[ MENUS & HANDLES ]==============================//
@@ -176,7 +167,7 @@ public Action Command_ServerList(int client, int args)
 }
 
 // Command_ServerList menu Menu-Handler
-public int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, int Clicked)
+int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, int Clicked)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- ServerListMenuHandler");
@@ -190,7 +181,7 @@ public int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, i
 			ListMenu.GetItem(Clicked, sMenuItemInfo, sizeof(sMenuItemInfo));
 			
 			if (StrEqual(sMenuItemInfo, "EditAdvertisements"))		// If it was the edit advertisement button, open the edit menu.
-				Command_EditServerRedirectAdvertisements(client, 0);
+				OpenEditServerRedirectAdvertisementsMenu(client);
 			else if (String_StartsWith(sMenuItemInfo, "[C]")) 		// If it was a category, show the category servers
 				LoadCategoryMenu(client, sMenuItemInfo[4]);
 				
@@ -267,7 +258,7 @@ public int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, i
 }
 
 // ServerListMenuHandler menu Menu-Handler
-public int ServerInfoMenuHandler(Menu ServerInfoMenu, MenuAction action, int client, int Clicked)
+int ServerInfoMenuHandler(Menu ServerInfoMenu, MenuAction action, int client, int Clicked)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- ServerInfoMenuHandler");
@@ -323,21 +314,21 @@ public int ServerInfoMenuHandler(Menu ServerInfoMenu, MenuAction action, int cli
 
 //==================================[ HELPING ]==============================//
 // Update other servers
-stock void LoadServers()
+void LoadServers(bool bFirstLoad = false)
 {
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- LoadServers");
+		LogMessage(" <-- LoadServers | bFirstLoad = %b", bFirstLoad);
 	
-	DB.Format(Query, sizeof(Query), "SELECT *, UNIX_TIMESTAMP(unix_lastupdate) FROM `server_redirect_servers` WHERE `server_id` != %d ORDER BY `server_id`", g_srCurrentServer.iServerID);
+	DB.Format(Query, sizeof(Query), "SELECT *, UNIX_TIMESTAMP(unix_lastupdate) FROM `server_redirect_servers` WHERE `server_steam_id` != %d ORDER BY `server_backup_id`", g_srThisServer.iServerSteamAID);
 	
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage("[LoadServers] Query: %s", Query);
 	
-	DB.Query(T_OnServersReceive, Query);
+	DB.Query(T_OnServersReceive, Query, bFirstLoad);
 }
 
 // Clean other servers array
-stock void CleanServersArray(int iStart)
+void CleanServersArray(int iStart)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- CleanServersArray | Cleaned the array from the %d index to the end", iStart);
@@ -349,7 +340,7 @@ stock void CleanServersArray(int iStart)
 }
 
 // Load Category-Menu
-stock void LoadCategoryMenu(int client, char[] sCategory)
+void LoadCategoryMenu(int client, char[] sCategory)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadCategoryMenu");
@@ -360,7 +351,7 @@ stock void LoadCategoryMenu(int client, char[] sCategory)
 }
 
 // Load Category-Menu
-stock void SelectServerMenu(int client, const char[] sCategory, MenuHandler hMenuHandlerToUse, const char[] sTitle, int iTitleLength)
+void SelectServerMenu(int client, const char[] sCategory, MenuHandler hMenuHandlerToUse, const char[] sTitle, int iTitleLength)
 {
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- SelectServerMenu");
@@ -380,7 +371,7 @@ stock void SelectServerMenu(int client, const char[] sCategory, MenuHandler hMen
 }
 
 // Load Servers to choose from them
-stock void SelectServerMainMenu(int client, MenuHandler mMenuHandlerToUse, const char[] sTitle, int iTitleLength, bool bAddEditAdvButton)
+void SelectServerMainMenu(int client, MenuHandler mMenuHandlerToUse, const char[] sTitle, int iTitleLength, bool bAddEditAdvButton)
 {
 	Menu mServerList = new Menu(mMenuHandlerToUse);
 	mServerList.SetTitle(sTitle);
@@ -404,12 +395,12 @@ stock void SelectServerMainMenu(int client, MenuHandler mMenuHandlerToUse, const
 }
 
 // Load servers into a menu
-stock int LoadMenuServers(Menu mMenu, int client, const char[] sCategory, int iTitleLenght)
+int LoadMenuServers(Menu mMenu, int client, const char[] sCategory, int iTitleLenght)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadMenuServers");
 	
-	int iStringSize = (460 - iTitleLenght) / 6;
+	int iStringSize = (464 - iTitleLenght) / 6;
 	
 	char[] sServerShowString = new char[iStringSize];
 	
@@ -423,17 +414,16 @@ stock int LoadMenuServers(Menu mMenu, int client, const char[] sCategory, int iT
 		
 		if (!g_srOtherServers[iCurrentServer].bShowInServerList)
 			Format(sServerShowString, iStringSize, "%s %t", sServerShowString, "ServerHiddenMenu");
-			
+		
 		if (g_srOtherServers[iCurrentServer].bServerStatus)
 		{
 			if (g_srOtherServers[iCurrentServer].iNumOfPlayers >= g_srOtherServers[iCurrentServer].iMaxPlayers - ((!g_srOtherServers[iCurrentServer].bHiddenSlots || CanClientUseReservedSlots(client, iCurrentServer)) ? 0 : g_srOtherServers[iCurrentServer].iReservedSlots))
 				Format(sServerShowString, iStringSize, "%s %t", sServerShowString, "ServerFullMenu");
 				
-			FormatStringWithServerProperties(sServerShowString, iStringSize, iCurrentServer, client);
+			FormatStringWithServerProperties(sServerShowString, iStringSize + 1, iCurrentServer, client);
 		}
 		else
 			Format(sServerShowString, iStringSize, "%s %t", g_srOtherServers[iCurrentServer].sServerName, "ServerOfflineMenu");
-			
 		
 		char cServerID[3];
 		IntToString(iCurrentServer, cServerID, sizeof(cServerID));
@@ -446,7 +436,7 @@ stock int LoadMenuServers(Menu mMenu, int client, const char[] sCategory, int iT
 }
 
 // Get the size of just the template witout the properties.
-stock int GetEmptyFormatStringSize(const char[] sFormatString, int iFormatStringLenght)
+int GetEmptyFormatStringSize(const char[] sFormatString, int iFormatStringLenght)
 {
 	// Get the full template.
 	char[] sFullFormatString = new char[iFormatStringLenght];
@@ -455,7 +445,7 @@ stock int GetEmptyFormatStringSize(const char[] sFormatString, int iFormatString
 	// What we want to get rid of.
 	char sToReplace[][] =  { "{shortname}", "{longname}", "{category}", "{map}", "{status}", "{bots}", "{ip}", "{id}", "{port}", "{current}", "{max}" };
 	
-	// Loop throw this and remove each string.
+	// Loop through this and remove each string.
 	for (int iCurrentStringToReplace = 0; iCurrentStringToReplace < sizeof(sToReplace); iCurrentStringToReplace++)
 		ReplaceString(sFullFormatString, iFormatStringLenght, sToReplace[iCurrentStringToReplace], "");
 	
@@ -464,7 +454,7 @@ stock int GetEmptyFormatStringSize(const char[] sFormatString, int iFormatString
 }
 
 // Formats a string with server properties.
-stock void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, int iServerIndex, int client = -1)
+void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, int iServerIndex, int client = -1)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- FormatStringWithServerProperties");
@@ -475,7 +465,7 @@ stock void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, i
 	// for each property, the number of characters in use will be subtracted from the variable that stores the number of characters left.
 	
 	// SERVER ID (DB ID)
-	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{id}", g_srOtherServers[iServerIndex].iServerID, false);
+	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{id}", g_srOtherServers[iServerIndex].iServerSteamAID, false);
 	
 	// SERVER PORT
 	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{port}", g_srOtherServers[iServerIndex].iServerPort, false);
@@ -526,36 +516,35 @@ stock void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, i
 		}
 		
 		// SERVER CATEGORY - MAX SIZE 64
-		iClaculateBuffer = CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty, g_srOtherServers[iServerIndex].sServerCategory, sizeof(g_srOtherServers[].sServerCategory));
+		iClaculateBuffer = CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty, g_srOtherServers[iServerIndex].sServerCategory);
 		iClaculateBuffer *= ReplaceString(sToFormat, iStringSize, "{category}", sReplaceBuffer, false);
 		iNumOfFreeCharacters += iClaculateBuffer;
 		
 		// SERVER MAP - MAX SIZE 64
-		iClaculateBuffer = CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty, g_srOtherServers[iServerIndex].sServerMap, sizeof(g_srOtherServers[].sServerMap));
+		iClaculateBuffer = CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty, g_srOtherServers[iServerIndex].sServerMap);
 		iClaculateBuffer *= ReplaceString(sToFormat, iStringSize, "{map}", sReplaceBuffer, false);
 		iNumOfFreeCharacters += iClaculateBuffer;
 		
 		// SERVER SHORT NAME - MAX SIZE <= FULL NAME
-		iClaculateBuffer = CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty + (iNumOfFreeCharacters > 0 ? iNumOfFreeCharacters : 0), sShortServerName, sizeof(g_srOtherServers[].sServerName));
+		iClaculateBuffer = CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty + (iNumOfFreeCharacters > 0 ? iNumOfFreeCharacters : 0), sShortServerName);
 		iClaculateBuffer *= ReplaceString(sToFormat, iStringSize, "{shortname}", sReplaceBuffer, false);
 		iNumOfFreeCharacters += iClaculateBuffer;
 		
 		// SERVER FULL NAME - MAX SIZE 245
-		CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty + (iNumOfFreeCharacters > 0 ? iNumOfFreeCharacters : 0), g_srOtherServers[iServerIndex].sServerName, sizeof(g_srOtherServers[].sServerName));
+		CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty + (iNumOfFreeCharacters > 0 ? iNumOfFreeCharacters : 0), g_srOtherServers[iServerIndex].sServerName);
 		ReplaceString(sToFormat, iStringSize, "{longname}", sReplaceBuffer, false);
 	}
 }
 
 // ReplaceString() with an Int type instead of String (char[])
-stock int ReplaceStringWithInt(char[] sDest, int iDestSize, char[] sToReplace, int iValueToReplaceWith, bool bCaseSensitive = true)
+int ReplaceStringWithInt(char[] sDest, int iDestSize, char[] sToReplace, int iValueToReplaceWith, bool bCaseSensitive = true)
 {
-	char sIntToString[64];
-	
+	char sIntToString[128];
 	return IntToString(iValueToReplaceWith, sIntToString, sizeof(sIntToString)) * ReplaceString(sDest, iDestSize, sToReplace, sIntToString, bCaseSensitive);
 }
 
 // Load Categories into a menu
-stock int LoadMenuCategories(Menu mMenu, int client)
+int LoadMenuCategories(Menu mMenu, int client)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadMenuCategories");
@@ -578,7 +567,7 @@ stock int LoadMenuCategories(Menu mMenu, int client)
 }
 
 // Check if Category already exists
-stock bool CategoryAlreadyExist(int iServer)
+bool CategoryAlreadyExist(int iServer)
 {
 	for (int iCurrentServer = 0; iCurrentServer < iServer; iCurrentServer++)
 		if (StrEqual(g_srOtherServers[iCurrentServer].sServerCategory, g_srOtherServers[iServer].sServerCategory, false))
@@ -588,13 +577,13 @@ stock bool CategoryAlreadyExist(int iServer)
 }
 
 // Check if the client should have access to the server
-stock bool ClientCanAccessToServer(int client, int iServer)
+bool ClientCanAccessToServer(int client, int iServer)
 {
 	return (g_srOtherServers[iServer].bShowInServerList || CheckCommandAccess(client, "server_redirect_show_hidden_servers", ADMFLAG_ROOT));
 }
 
 // Check if the client should see reserved slots
-stock bool CanClientUseReservedSlots(int client, int iServer)
+bool CanClientUseReservedSlots(int client, int iServer)
 {
-	return (g_srOtherServers[iServer].iReservedSlots && IsValidClient(client) && CheckCommandAccess(client, "server_redirect_use_reserved_slots", ADMFLAG_ROOT));
+	return (g_srOtherServers[iServer].iReservedSlots && CheckCommandAccess(client, "server_redirect_use_reserved_slots", ADMFLAG_ROOT));
 } 
