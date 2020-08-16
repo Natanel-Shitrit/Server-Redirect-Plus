@@ -151,9 +151,9 @@ int EditAdvertisementsMenuHandler(Menu EditAdvertisementsMenu, MenuAction action
 	{
 		case MenuAction_Select:
 		{
-			if(Clicked == 0)
-				g_advToEdit.iAdvID = -1;
-			else
+			g_advToEdit.iAdvID = 0;
+			
+			if(Clicked != 0)
 			{
 				char sAdvertisementID[3];
 				EditAdvertisementsMenu.GetItem(Clicked, sAdvertisementID, sizeof(sAdvertisementID));
@@ -179,13 +179,11 @@ void EditAdvertisementPropertiesMenu(int client)
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- EditAdvertisementPropertiesMenu");
 	
-	if (g_advToEdit.iRepeatTime == ADVERTISEMENT_INVALID)
-		g_advToEdit.iRepeatTime = ADVERTISEMENT_LOOP;
-	
 	char sBuffer[128];
+	bool bNewAdvertisement = !g_advToEdit.iAdvID;
 	
 	Menu mAddAdvertisement = new Menu(AddAdvertisementMenuHandler);
-	mAddAdvertisement.SetTitle("%s %t", PREFIX_NO_COLOR, g_advToEdit.iAdvID == -1 ? "MenuAddAdvActionAdd" : "MenuAddAdvActionEdit");
+	mAddAdvertisement.SetTitle("%s %t", PREFIX_NO_COLOR, bNewAdvertisement ? "MenuAddAdvActionAdd" : "MenuAddAdvActionEdit");
 	
 	Format(sBuffer, sizeof(sBuffer), "%t", "MenuAddAdvServerToAdv",  g_advToEdit.iServerSteamAIDToAdvertise);
 	mAddAdvertisement.AddItem("AdvServerID", sBuffer);// 0
@@ -210,10 +208,10 @@ void EditAdvertisementPropertiesMenu(int client)
 	
 	char sAdvID[4];
 	IntToString(g_advToEdit.iAdvID, sAdvID, sizeof(sAdvID));
-	Format(sBuffer, sizeof(sBuffer), "%t", g_advToEdit.iAdvID == -1 ? "MenuAddAdvActionAdd" : "MenuAddAdvActionEdit");
+	Format(sBuffer, sizeof(sBuffer), "%t", bNewAdvertisement ? "MenuAddAdvActionAdd" : "MenuAddAdvActionEdit");
 	mAddAdvertisement.AddItem(sAdvID, sBuffer);
 	
-	Format(sBuffer, sizeof(sBuffer), "%t", g_advToEdit.iAdvID == -1 ? "MenuAddAdvActionReset" : "MenuAddAdvActionDelete");
+	Format(sBuffer, sizeof(sBuffer), "%t", bNewAdvertisement ? "MenuAddAdvActionReset" : "MenuAddAdvActionDelete");
 	mAddAdvertisement.AddItem(sAdvID, sBuffer);
 	
 	mAddAdvertisement.ExitButton = true;
@@ -231,9 +229,7 @@ int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction action, in
 	{
 		case MenuAction_Select:
 		{
-			char sAdvID[4];
-			AddAdvertisementMenu.GetItem(7, sAdvID, sizeof(sAdvID));
-			int iAdvID = StringToInt(sAdvID);
+			bool bNewAdvertisement = !g_advToEdit.iAdvID;
 			
 			switch(Clicked)
 			{
@@ -241,11 +237,12 @@ int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction action, in
 				{
 					char sMenuTitle[128];
 					Format(sMenuTitle, sizeof(sMenuTitle), "%t\n ", "MenuTitleSelectServerToAdv", PREFIX_NO_COLOR);
-					SelectServerMainMenu(client, SelectServerToAdvMenuHandler, sMenuTitle, strlen(sMenuTitle), false);
+					SelectServerMainMenu(client, SelectServerToAdvMenuHandler, "{id} | {shortname}", sMenuTitle, strlen(sMenuTitle), false);
 				}
 				case 1:
 				{
-					g_advToEdit.iRepeatTime = (g_advToEdit.iRepeatTime >= ADVERTISEMENT_LOOP && g_advToEdit.iRepeatTime != ADVERTISEMENT_INVALID) ? ADVERTISEMENT_MAP : g_advToEdit.iRepeatTime == ADVERTISEMENT_MAP ? ADVERTISEMENT_PLAYERS_RANGE : ADVERTISEMENT_LOOP;
+					g_advToEdit.iRepeatTime = (g_advToEdit.iRepeatTime == ADVERTISEMENT_LOOP) ? ADVERTISEMENT_MAP :
+												 g_advToEdit.iRepeatTime == ADVERTISEMENT_MAP ? ADVERTISEMENT_PLAYERS_RANGE : ADVERTISEMENT_LOOP;
 					EditAdvertisementPropertiesMenu(client);
 				}
 				case 2:
@@ -270,8 +267,8 @@ int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction action, in
 					
 					if(!(iErrorID = IsValidAdvertisement(g_advToEdit)))
 					{
-						iAdvID == -1 ? AddAdvertisementToDB() : UpdateAdvertisementDB(iAdvID);		// Add / Edit adv
-						ResetAdvToEdit();
+						bNewAdvertisement ? AddAdvertisementToDB() : UpdateAdvertisementDB(g_advToEdit.iAdvID);		// Add / Edit adv
+						g_advToEdit.Reset();
 					}
 					else
 					{
@@ -281,13 +278,13 @@ int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction action, in
 				}
 				case 7:
 				{
-					if(iAdvID == -1)
+					if(bNewAdvertisement)
 					{
-						ResetAdvToEdit();
+						g_advToEdit.Reset();
 						EditAdvertisementPropertiesMenu(client);
 					}
 					else
-						DeleteAdvertisementDB(iAdvID);
+						DeleteAdvertisementDB(g_advToEdit.iAdvID);
 				}
 			}
 			
@@ -321,7 +318,7 @@ int SelectServerToAdvMenuHandler(Menu SelectServerToAdv, MenuAction action, int 
 				char sMenuTitle[128];
 				Format(sMenuTitle, sizeof(sMenuTitle), "%t", "MenuTitleSelectFromCategoryToAdv", PREFIX_NO_COLOR, sBuffer[4]);
 				
-				SelectServerMenu(client, sBuffer[4], SelectServerToAdvMenuHandler, sMenuTitle, strlen(sMenuTitle));
+				SelectServerMenu(client, sBuffer[4], "{id} | {shortname}", SelectServerToAdvMenuHandler, sMenuTitle, strlen(sMenuTitle));
 			}
 			else
 			{
@@ -635,18 +632,6 @@ void LoadAdvToEdit(int iAdvID)
 		LogMessage(" <-- LoadAdvToEdit | iAdvID = %d", iAdvID);
 	
 	g_advToEdit = g_advAdvertisements[iAdvID];
-}
-
-// Reseting the editable advertisement
-void ResetAdvToEdit()
-{
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- ResetAdvToEdit");
-	
-	Advertisement adv;
-	
-	g_advToEdit = adv;
-	g_advToEdit.iAdvID = -1;
 }
 
 // Clearing the advertisement array from a given position to the end.

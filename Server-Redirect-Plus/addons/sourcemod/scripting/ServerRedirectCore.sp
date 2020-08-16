@@ -67,6 +67,20 @@ enum struct Advertisement
 	char sMessageContent[512];	// Message to print
 	
 	bool bActive;				// If the advertisement is currently active
+	
+	void Reset()
+	{
+		this.iAdvID = 0;
+		this.iRepeatTime = 0;
+		this.iCoolDownTime = 0;
+		this.iAdvertisedTime = 0;
+		this.iPlayersRange = {0, 0};
+		this.iServerSteamAIDToAdvertise = 0;
+		
+		this.sMessageContent = "";
+		
+		this.bActive = false;
+	}
 }
 Advertisement g_advAdvertisements[MAX_ADVERTISEMENTS];	// All of the server advertisements
 Advertisement g_advToEdit;								// For editing / adding advertisements
@@ -76,7 +90,6 @@ enum
 {
 	ADVERTISEMENT_PLAYERS_RANGE = -2,  	// USING DEFFRENCE CHECK
 	ADVERTISEMENT_MAP 		 		, 	// USING DEFFRENCE CHECK
-	ADVERTISEMENT_INVALID			,
 	ADVERTISEMENT_LOOP		 			// USING TIMER
 }
 
@@ -317,12 +330,12 @@ Action Timer_Loop(Handle hTimer)
 		// Loop throw all the advertisements (all valid advertisements).
 		for (int iCurrentAdvertisement = 0; iCurrentAdvertisement < MAX_ADVERTISEMENTS; iCurrentAdvertisement++)
 		{
+			// If this advertisement is invalid, everything after it would be the same because we are loading the all of the advertisements to the start of the array.
+			if(!g_advAdvertisements[iCurrentAdvertisement].iAdvID)
+				break;
+				
 			// Get the advertisement repeat time.
 			int iAdvertisementRepeatTime = g_advAdvertisements[iCurrentAdvertisement].iRepeatTime;
-			
-			// If this advertisement is invalid, everything after it would be the same because we are loading the all of the advertisements to the start of the array.
-			if(iAdvertisementRepeatTime == ADVERTISEMENT_INVALID)
-				break;
 			
 			// If the advertisement isn't a LOOP type, continue to the next one
 			if(iAdvertisementRepeatTime < ADVERTISEMENT_LOOP)

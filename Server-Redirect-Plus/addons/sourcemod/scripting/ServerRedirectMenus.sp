@@ -161,7 +161,7 @@ public Action Command_ServerList(int client, int args)
 	char sMenuTitle[128];
 	Format(sMenuTitle, sizeof(sMenuTitle), "%t", "MenuTitleMain", PREFIX_NO_COLOR);
 	
-	SelectServerMainMenu(client, ServerListMenuHandler, sMenuTitle, strlen(sMenuTitle), true);
+	SelectServerMainMenu(client, ServerListMenuHandler, g_sMenuFormat, sMenuTitle, strlen(sMenuTitle), true);
 	
 	return Plugin_Handled;
 }
@@ -347,11 +347,11 @@ void LoadCategoryMenu(int client, char[] sCategory)
 	
 	char sMenuTitle[128];
 	Format(sMenuTitle, sizeof(sMenuTitle), "%t", "MenuTitleCategory", PREFIX_NO_COLOR, sCategory);
-	SelectServerMenu(client, sCategory, ServerListMenuHandler, sMenuTitle, strlen(sMenuTitle));
+	SelectServerMenu(client, sCategory, g_sMenuFormat, ServerListMenuHandler, sMenuTitle, strlen(sMenuTitle));
 }
 
 // Load Category-Menu
-void SelectServerMenu(int client, const char[] sCategory, MenuHandler hMenuHandlerToUse, const char[] sTitle, int iTitleLength)
+void SelectServerMenu(int client, const char[] sCategory, const char[] sMenuFormat, MenuHandler hMenuHandlerToUse, const char[] sTitle, int iTitleLength)
 {
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- SelectServerMenu");
@@ -360,7 +360,7 @@ void SelectServerMenu(int client, const char[] sCategory, MenuHandler hMenuHandl
 
 	mServerCategoryList.SetTitle(sTitle);
 
-	int iNumOfPublicServers = LoadMenuServers(mServerCategoryList, client, sCategory, iTitleLength);
+	int iNumOfPublicServers = LoadMenuServers(mServerCategoryList, client, sMenuFormat, sCategory, iTitleLength);
 
 	if(iNumOfPublicServers == 0)
 		CPrintToChat(client, "%t", "NoServersFound", PREFIX);
@@ -371,7 +371,7 @@ void SelectServerMenu(int client, const char[] sCategory, MenuHandler hMenuHandl
 }
 
 // Load Servers to choose from them
-void SelectServerMainMenu(int client, MenuHandler mMenuHandlerToUse, const char[] sTitle, int iTitleLength, bool bAddEditAdvButton)
+void SelectServerMainMenu(int client, MenuHandler mMenuHandlerToUse, const char[] sMenuFormat, const char[] sTitle, int iTitleLength, bool bAddEditAdvButton)
 {
 	Menu mServerList = new Menu(mMenuHandlerToUse);
 	mServerList.SetTitle(sTitle);
@@ -384,7 +384,7 @@ void SelectServerMainMenu(int client, MenuHandler mMenuHandlerToUse, const char[
 	}
 		
 	int iNumOfPublicCategories 	= LoadMenuCategories(mServerList, client);
-	int iNumOfPublicServers 	= LoadMenuServers(mServerList, client, "", iTitleLength);
+	int iNumOfPublicServers 	= LoadMenuServers(mServerList, client, sMenuFormat, "", iTitleLength);
 	
 	if(iNumOfPublicServers + iNumOfPublicCategories == 0)
 		CPrintToChat(client, "%t", "NoServersFound", PREFIX);
@@ -395,7 +395,7 @@ void SelectServerMainMenu(int client, MenuHandler mMenuHandlerToUse, const char[
 }
 
 // Load servers into a menu
-int LoadMenuServers(Menu mMenu, int client, const char[] sCategory, int iTitleLenght)
+int LoadMenuServers(Menu mMenu, int client, const char[] sMenuFormat, const char[] sCategory, int iTitleLenght)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadMenuServers");
@@ -410,7 +410,7 @@ int LoadMenuServers(Menu mMenu, int client, const char[] sCategory, int iTitleLe
 		if (StrEqual(g_srOtherServers[iCurrentServer].sServerName, "", false) || !StrEqual(g_srOtherServers[iCurrentServer].sServerCategory, sCategory, false) || !ClientCanAccessToServer(client, iCurrentServer))
 			continue;
 		
-		strcopy(sServerShowString, iStringSize, g_sMenuFormat);
+		strcopy(sServerShowString, iStringSize, sMenuFormat);
 		
 		if (!g_srOtherServers[iCurrentServer].bShowInServerList)
 			Format(sServerShowString, iStringSize, "%s %t", sServerShowString, "ServerHiddenMenu");
