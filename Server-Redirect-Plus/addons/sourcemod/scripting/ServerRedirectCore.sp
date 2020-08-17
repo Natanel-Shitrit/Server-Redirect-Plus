@@ -20,10 +20,6 @@
 // Regex string
 #define REGEX_COUNT_STRINGS "{(shortname|longname|category|map)}"
 
-// Will be dynamic in the next version
-#define MAX_SERVERS 50
-#define MAX_ADVERTISEMENTS MAX_SERVERS * 4
-
 //============[ DB ]============//
 Database DB = null;								// Database handle
 char Query[512];								// Query string for quering 
@@ -53,37 +49,6 @@ int 	g_iServerTimeOut;						// The amount of time before this server will be del
 
 //======[ Settings Related ]====//
 Regex rgCountStrings;
-
-//=====[ ADVERTISEMENT ENUM ]===//
-enum struct Advertisement
-{
-	int iAdvID;					// Advertisement ID
-	int iRepeatTime;			// How long to wait between each advertise
-	int iCoolDownTime;			// How long should this advertisement should be on cooldown (for 'deffrence check' advertisements)
-	int iAdvertisedTime;		// Used for calculating if the advertisement should post
-	int iPlayersRange[2]; 		// 0 - MIN | 1 - MAX
-	int iServerSteamAIDToAdvertise;	// Advertised Server
-	
-	char sMessageContent[512];	// Message to print
-	
-	bool bActive;				// If the advertisement is currently active
-	
-	void Reset()
-	{
-		this.iAdvID = 0;
-		this.iRepeatTime = 0;
-		this.iCoolDownTime = 0;
-		this.iAdvertisedTime = 0;
-		this.iPlayersRange = {0, 0};
-		this.iServerSteamAIDToAdvertise = 0;
-		
-		this.sMessageContent = "";
-		
-		this.bActive = false;
-	}
-}
-Advertisement g_advAdvertisements[MAX_ADVERTISEMENTS];	// All of the server advertisements
-Advertisement g_advToEdit;								// For editing / adding advertisements
 
 //=======[ ADV TYPE ENUM ]======//
 enum
@@ -118,6 +83,44 @@ enum
 }
 int g_iUpdateAdvProprietary[MAXPLAYERS + 1] =  { UPDATE_NOTHING, ... };
 
+//====[ SERVER SEARCH ENUM ]====//
+enum
+{
+	SERVER_SEARCH_BY_STEAM_ID = 0,
+	SERVER_SEARCH_BY_BACKUP_ID
+}
+
+//======[ DB UPDATE ENUM ]======//
+enum
+{
+	UPDATE_SERVER_STEAM_ID,
+	UPDATE_SERVER_PLAYERS,
+	UPDATE_SERVER_STATUS, 
+	UPDATE_SERVER_START
+}
+
+//========[ TABLE STRUCT ]======//
+enum
+{
+	SQL_FIELD_SERVER_BACKUP_ID = 1,
+	SQL_FIELD_SERVER_STEAM_ID,
+	SQL_FIELD_SERVER_NAME,
+	SQL_FIELD_SERVER_CATEGORY,
+	SQL_FIELD_SERVER_IP,
+	SQL_FIELD_SERVER_PORT,
+	SQL_FIELD_SERVER_STATUS,
+	SQL_FIELD_SERVER_VISIBLE,
+	SQL_FIELD_SERVER_MAP,
+	SQL_FIELD_SERVER_PLAYERS,
+	SQL_FIELD_SERVER_RESERVED_SLOTS,
+	SQL_FIELD_SERVER_HIDDEN_SLOTS,
+	SQL_FIELD_SERVER_MAX_PLAYERS,
+	SQL_FIELD_SERVER_INCLUD_BOTS,
+	SQL_FIELD_SERVER_LAST_UPDATE,
+	SQL_FIELD_SERVER_TIMEOUT,
+	SQL_FIELD_SERVER_LAST_UPDATE_UNIX
+}
+
 //=======[ SERVER STRUCT ]======//
 enum struct Server
 {
@@ -137,25 +140,268 @@ enum struct Server
 	bool bServerStatus;
 	bool bHiddenSlots;
 	bool bIncludeBots;
+	
+	void Reset()
+	{
+		this.sServerCategory = "";
+		this.sServerName 	 = "";
+		this.sServerMap 	 = "";
+		
+		this.iReservedSlots  = 0;
+		this.iNumOfPlayers	 = 0;
+		this.iServerIP32	 = 0;
+		this.iServerPort	 = 0;
+		this.iMaxPlayers	 = 0;
+		this.iServerSteamAID = 0;
+		this.iServerBackupID = 0;
+		
+		this.bShowInServerList = false;
+		this.bServerStatus 	   = false;
+		this.bHiddenSlots 	   = false;
+		this.bIncludeBots 	   = false;
+	}
+	
+	bool IsTimedOut(Handle hQuery)
+	{
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage(" <-- Server.IsTimedOut() | iServerSteamAID = %d", this.iServerSteamAID);
+		
+		int iServerTimeOut = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_TIMEOUT) * 60;
+		if(iServerTimeOut > 0)
+		{
+			int iServerLastUpdate 		 = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_LAST_UPDATE_UNIX);
+			int iServerTimeWithoutUpdate = GetTime() - iServerLastUpdate;
+			
+			if (g_cvPrintDebug.BoolValue)
+				LogMessage("Deleting Server (Server Steam ID - %d | Last update - %d | timeout time in sec - %d | time without update %d)",
+					this.iServerSteamAID,
+					iServerLastUpdate,
+					iServerTimeOut,
+					iServerTimeWithoutUpdate
+				);
+				
+			return (iServerTimeWithoutUpdate >= iServerTimeOut);
+		}
+		
+		return false;
+	}
+	
+	void DeleteFromDB()
+	{
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage(" <-- Server.DeleteFromDB() | iServerSteamAID = %d", this.iServerSteamAID);
+		
+		Format(Query, sizeof(Query), "DELETE FROM `server_redirect_servers` WHERE `server_steam_id` = %d", this.iServerSteamAID);
+					
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage("Delete Server Query: %s", Query);
+	
+		DB.Query(T_FakeFastQuery, Query, _, DBPrio_Low);
+	}
+	
+	// Registering a new server in the Database server.
+	void Register()
+	{
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage(" <-- Server.Register() | iServerSteamAID = %d", this.iServerSteamAID);
+		
+		DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_servers` (`server_backup_id`, `server_steam_id`, `server_name`, `server_category`, `server_ip`, `server_port`, `server_status`, `server_map`, `number_of_players`, `max_players`, `reserved_slots`, `hidden_slots`, `server_visible`, `timeout_time`) VALUES (%d, %d, '%s', '%s', %d, %d, %d, '%s', %d, %d, %d, %d, %b, %d)", 
+			this.iServerBackupID,
+			this.iServerSteamAID,
+			this.sServerName, 
+			this.sServerCategory, 
+			this.iServerIP32, 
+			this.iServerPort, 
+			this.bServerStatus, 
+			this.sServerMap, 
+			this.iNumOfPlayers, 
+			this.iMaxPlayers,
+			this.iReservedSlots,
+			this.bHiddenSlots,
+			this.bShowInServerList,
+			g_iServerTimeOut
+		);
+		
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage("Register Query: %s", Query);
+		
+		DB.Query(T_FakeFastQuery, Query, _, DBPrio_High);
+	}
+	
+	// Updating the server information based of the sent parameter.
+	void UpdateInDB(int iWhatToUpdate, DBPriority dbPriority = DBPrio_Normal)
+	{
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage(" <-- Server.UpdateInDB() | iWhatToUpdate = %d", iWhatToUpdate);
+		
+		// TODO: Easy formatting, testing needed:
+		// Each UPDATE_TYPE will have a string and will be formatted in this template:
+		//Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET {CHANGE} WHERE `server_steam_id` = %d")
+		
+		switch (iWhatToUpdate)
+		{
+			case UPDATE_SERVER_STEAM_ID:
+			{
+				Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_steam_id` = %d WHERE `server_backup_id` = %d",
+					this.iServerSteamAID,
+					this.iServerBackupID
+				);
+			}
+			case UPDATE_SERVER_PLAYERS:
+			{
+				// Get Client-Count
+				this.iNumOfPlayers = GetClientCountEx(this.bIncludeBots);
+				
+				Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `number_of_players` = %d WHERE `server_steam_id` = %d",
+					this.iNumOfPlayers,
+					this.iServerSteamAID
+				);
+			}
+			case UPDATE_SERVER_STATUS:
+			{
+				Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_status` = %d WHERE `server_steam_id` = %d",
+					this.bServerStatus,
+					this.iServerSteamAID
+				);
+			}
+			case UPDATE_SERVER_START:
+			{
+				DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_name` = '%s', `server_ip` = %d, `server_port` = %d, `server_status` = %d, `server_visible` = %d, `max_players` = %d, `reserved_slots` = %d, `hidden_slots` = %b, `bots_included` = %b, `server_map` = '%s', `timeout_time` = %d WHERE `server_steam_id` = %d",
+					this.sServerName,
+					this.iServerIP32,
+					this.iServerPort,
+					this.bServerStatus,
+					this.bShowInServerList,
+					this.iMaxPlayers,
+					this.iReservedSlots,
+					this.bHiddenSlots,
+					this.bIncludeBots,
+					this.sServerMap,
+					g_iServerTimeOut,
+					this.iServerSteamAID
+				);
+			}
+		}
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage("Update Query: %s", Query);
+		
+		DB.Query(T_FakeFastQuery, Query, _, dbPriority);
+	}
+	
+	void UpdateServerAdvertisements(int iOutdatedServerSteamAID)
+	{
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage(" <-- Server.DeleteFromDB() | iServerSteamAID = %d (Outdated: %d)", this.iServerSteamAID, iOutdatedServerSteamAID);
+		
+		Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `server_id_to_adv` = %d WHERE `server_id_to_adv` = %d", this.iServerSteamAID, iOutdatedServerSteamAID);
+		
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage("`server_id_to_adv` Query: %s", Query);
+		
+		DB.Query(T_FakeFastQuery, Query);
+		
+		Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `server_id` = %d WHERE `server_id` = %d", this.iServerSteamAID, iOutdatedServerSteamAID);
+		
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage("`server_id_to_adv` Query: %s", Query);
+		
+		DB.Query(T_FakeFastQuery, Query);
+	}
 }
+ArrayList g_hOtherServers;
 Server g_srThisServer;
-Server g_srOtherServers[MAX_SERVERS];
 
-//====[ SERVER SEARCH ENUM ]====//
-enum
+//=====[ ADVERTISEMENT ENUM ]===//
+enum struct Advertisement
 {
-	SERVER_SEARCH_BY_STEAM_ID = 0,
-	SERVER_SEARCH_BY_BACKUP_ID
+	int iPlayersRange[2]; 		// 0 - MIN | 1 - MAX
+	
+	int iServerSteamAIDToAdvertise;	// Advertised Server
+	int iAdvertisedTime;		// Used for calculating if the advertisement should post
+	int iCoolDownTime;			// How long should this advertisement should be on cooldown (for 'deffrence check' advertisements)
+	int iRepeatTime;			// How long to wait between each advertise
+	int iAdvID;					// Advertisement ID
+	
+	char sMessageContent[512];	// Message to print
+	
+	bool bActive;				// If the advertisement is currently active
+	
+	void Reset()
+	{
+		this.iPlayersRange = {0, 0};
+		
+		this.iServerSteamAIDToAdvertise = 0;
+		this.iAdvertisedTime = 0;
+		this.iCoolDownTime 	 = 0;
+		this.iRepeatTime 	 = 0;
+		this.iAdvID 		 = 0;
+		
+		this.sMessageContent = "";
+		
+		this.bActive = false;
+	}
+	
+	void DeleteFromDB()
+	{
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage(" <-- Advertisement.DeleteFromDB() | iAdvID = %d", this.iAdvID);	
+	
+		Format(Query, sizeof(Query), "DELETE FROM `server_redirect_advertisements` WHERE `id` = %d", this.iAdvID);	
+		
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage("Query: %s", Query);
+		
+		DB.Query(T_UpdateAdvertisementQuery, Query, false);
+	}
+	
+	void UpdateOnDB()
+	{
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage(" <-- Advertisement.UpdateOnDB() | iAdvID = %d", this.iAdvID);
+		
+		char sPlayersRange[6];
+		Format(sPlayersRange, sizeof(sPlayersRange), "%d|%d", this.iPlayersRange[0], this.iPlayersRange[1]);
+		
+		DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `server_id_to_adv` = %d, `adv_repeat_time` = %d, `adv_cooldown_time` = %d, `adv_players_range` = '%s', `adv_message` = '%s' WHERE `id` = %d",
+			this.iServerSteamAIDToAdvertise,
+			this.iRepeatTime,
+			this.iCoolDownTime,
+			sPlayersRange,
+			this.sMessageContent,
+			this.iAdvID
+		);
+		
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage("Query: %s", Query);
+		
+		DB.Query(T_UpdateAdvertisementQuery, Query, false);
+	}
+	
+	void AddToDB()
+	{
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage(" <-- Advertisement.AddToDB() | iAdvID = %d", this.iAdvID);
+		
+		char sPlayersRange[6];
+		Format(sPlayersRange, sizeof(sPlayersRange), "%d|%d", this.iPlayersRange[0], this.iPlayersRange[1]);
+		
+		DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_advertisements`(`server_id`, `server_id_to_adv`, `adv_repeat_time`, `adv_cooldown_time`, `adv_message`, `adv_players_range`) VALUES (%d, %d, %d, %d, '%s', '%s')",
+			g_srThisServer.iServerSteamAID,
+			this.iServerSteamAIDToAdvertise,
+			this.iRepeatTime,
+			this.iCoolDownTime,
+			this.sMessageContent,
+			sPlayersRange
+		);
+		
+		if(g_cvPrintDebug.BoolValue)
+			LogMessage("Query: %s", Query);
+		
+		DB.Query(T_UpdateAdvertisementQuery, Query);
+	}
 }
-
-//======[ DB UPDATE ENUM ]======//
-enum
-{
-	UPDATE_SERVER_STEAM_ID,
-	UPDATE_SERVER_PLAYERS,
-	UPDATE_SERVER_STATUS, 
-	UPDATE_SERVER_START
-}
+ArrayList g_hAdvertisements; // All of the server advertisements
+Advertisement g_advToEdit;	 // For editing / adding advertisements
 
 // Late Load
 bool g_bLateLoad;
@@ -278,7 +524,7 @@ public void OnClientDisconnect(int client)
 		}
 		else
 		{
-			UpdateServer(UPDATE_SERVER_PLAYERS);
+			g_srThisServer.UpdateInDB(UPDATE_SERVER_PLAYERS);
 			
 			// Stop the update timer if it's running
 			if (!g_hServerUpdateTimer)
@@ -300,7 +546,7 @@ public void OnPluginEnd()
 	if(g_srThisServer.iServerBackupID > 0)
 	{
 		g_srThisServer.bServerStatus = false;
-		UpdateServer(UPDATE_SERVER_STATUS);
+		g_srThisServer.UpdateInDB(UPDATE_SERVER_STATUS);
 	}
 	else
 	{
@@ -327,23 +573,24 @@ Action Timer_Loop(Handle hTimer)
 	// If advertisements are enabled, try to find advertisements to post.
 	if(g_bAdvertisementsAreEnabled)
 	{
+		Advertisement advCurrentAdvertisement;
+		
 		// Loop throw all the advertisements (all valid advertisements).
-		for (int iCurrentAdvertisement = 0; iCurrentAdvertisement < MAX_ADVERTISEMENTS; iCurrentAdvertisement++)
+		for (int iCurrentAdvertisement = 0; iCurrentAdvertisement < g_hAdvertisements.Length; iCurrentAdvertisement++)
 		{
+			advCurrentAdvertisement = GetAdvertisementByIndex(iCurrentAdvertisement);
+			
 			// If this advertisement is invalid, everything after it would be the same because we are loading the all of the advertisements to the start of the array.
-			if(!g_advAdvertisements[iCurrentAdvertisement].iAdvID)
+			if(!advCurrentAdvertisement.iAdvID)
 				break;
-				
-			// Get the advertisement repeat time.
-			int iAdvertisementRepeatTime = g_advAdvertisements[iCurrentAdvertisement].iRepeatTime;
 			
 			// If the advertisement isn't a LOOP type, continue to the next one
-			if(iAdvertisementRepeatTime < ADVERTISEMENT_LOOP)
+			if(advCurrentAdvertisement.iRepeatTime < ADVERTISEMENT_LOOP)
 				continue;
 			
 			// If this is the time to post the advertisement, go for it.
-			if(g_iTimerCounter % iAdvertisementRepeatTime == 0)
-				PostAdvertisement(g_advAdvertisements[iCurrentAdvertisement].iServerSteamAIDToAdvertise, ADVERTISEMENT_LOOP, iCurrentAdvertisement);
+			if(g_iTimerCounter % advCurrentAdvertisement.iRepeatTime == 0)
+				PostAdvertisement(advCurrentAdvertisement.iServerSteamAIDToAdvertise, ADVERTISEMENT_LOOP, iCurrentAdvertisement);
 		}
 	}
 	
@@ -357,7 +604,7 @@ Action Timer_UpdateServerInDatabase(Handle timer)
 		LogMessage(" <-- Timer_UpdateServerInDatabase");
 	
 	// Update on the database
-	UpdateServer(UPDATE_SERVER_PLAYERS);
+	g_srThisServer.UpdateInDB(UPDATE_SERVER_PLAYERS);
 	
 	// Set the timer back to null.
 	g_hServerUpdateTimer = null;
@@ -432,95 +679,6 @@ void T_OnDatabaseReady(Handle owner, Handle hQuery, const char[] sError, any dat
 		LogError("Error in T_OnDatabaseReady: %s", sError);
 }
 
-// Updating the server information based of the sent parameter.
-void UpdateServer(int iWhatToUpdate, DBPriority dbPriority = DBPrio_Normal)
-{
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- UpdateServer | iWhatToUpdate = %d", iWhatToUpdate);
-	
-	// TODO: Easy formatting, testing needed:
-	// Each UPDATE_TYPE will have a string and will be formatted in this template:
-	//Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET {CHANGE} WHERE `server_steam_id` = %d")
-	
-	switch (iWhatToUpdate)
-	{
-		case UPDATE_SERVER_STEAM_ID:
-		{
-			Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_steam_id` = %d WHERE `server_backup_id` = %d",
-				g_srThisServer.iServerSteamAID,
-				g_srThisServer.iServerBackupID
-			);
-		}
-		case UPDATE_SERVER_PLAYERS:
-		{
-			// Get Client-Count
-			g_srThisServer.iNumOfPlayers = GetClientCountEx(g_srThisServer.bIncludeBots);
-			
-			Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `number_of_players` = %d WHERE `server_steam_id` = %d",
-				g_srThisServer.iNumOfPlayers,
-				g_srThisServer.iServerSteamAID
-			);
-		}
-		case UPDATE_SERVER_STATUS:
-		{
-			Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_status` = %d WHERE `server_steam_id` = %d",
-				g_srThisServer.bServerStatus,
-				g_srThisServer.iServerSteamAID
-			);
-		}
-		case UPDATE_SERVER_START:
-		{
-			DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_name` = '%s', `server_ip` = %d, `server_port` = %d, `server_status` = %d, `server_visible` = %d, `max_players` = %d, `reserved_slots` = %d, `hidden_slots` = %b, `bots_included` = %b, `server_map` = '%s', `timeout_time` = %d WHERE `server_steam_id` = %d",
-				g_srThisServer.sServerName,
-				g_srThisServer.iServerIP32,
-				g_srThisServer.iServerPort,
-				g_srThisServer.bServerStatus,
-				g_srThisServer.bShowInServerList,
-				g_srThisServer.iMaxPlayers,
-				g_srThisServer.iReservedSlots,
-				g_srThisServer.bHiddenSlots,
-				g_srThisServer.bIncludeBots,
-				g_srThisServer.sServerMap,
-				g_iServerTimeOut,
-				g_srThisServer.iServerSteamAID
-			);
-		}
-	}
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage("Update Query: %s", Query);
-	
-	DB.Query(T_FakeFastQuery, Query, _, dbPriority);
-}
-
-// Registering a new server in the Database server.
-void RegisterServer()
-{
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- RegisterServer");
-	
-	DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_servers` (`server_backup_id`, `server_steam_id`, `server_name`, `server_category`, `server_ip`, `server_port`, `server_status`, `server_map`, `number_of_players`, `max_players`, `reserved_slots`, `hidden_slots`, `server_visible`, `timeout_time`) VALUES (%d, %d, '%s', '%s', %d, %d, %d, '%s', %d, %d, %d, %d, %b, %d)", 
-		g_srThisServer.iServerBackupID,
-		g_srThisServer.iServerSteamAID,
-		g_srThisServer.sServerName, 
-		g_srThisServer.sServerCategory, 
-		g_srThisServer.iServerIP32, 
-		g_srThisServer.iServerPort, 
-		g_srThisServer.bServerStatus, 
-		g_srThisServer.sServerMap, 
-		g_srThisServer.iNumOfPlayers, 
-		g_srThisServer.iMaxPlayers,
-		g_srThisServer.iReservedSlots,
-		g_srThisServer.bHiddenSlots,
-		g_srThisServer.bShowInServerList,
-		g_iServerTimeOut
-	);
-	
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage("Register Query: %s", Query);
-	
-	DB.Query(T_FakeFastQuery, Query, _, DBPrio_High);
-}
-
 // Updating the server info in the Database server.
 void FindServer(int iSearchBy = SERVER_SEARCH_BY_STEAM_ID)
 {
@@ -554,15 +712,15 @@ void T_OnServerSearchResultsReceived(Handle owner, Handle hQuery, const char[] s
 			if(iSearchBy == SERVER_SEARCH_BY_BACKUP_ID)
 			{
 				// Update advertisements (Change old Server Steam-ID to the new one)
-				int iOldServerSteamID = SQL_FetchInt(hQuery, 0);
-				UpdateAdvertisementsSteamID(iOldServerSteamID);
+				int iOutdatedServerSteamID = SQL_FetchInt(hQuery, 0);
+				g_srThisServer.UpdateServerAdvertisements(iOutdatedServerSteamID);
 				
 				// Update the new Steam-ID
-				UpdateServer(UPDATE_SERVER_STEAM_ID, DBPrio_High);
+				g_srThisServer.UpdateInDB(UPDATE_SERVER_STEAM_ID, DBPrio_High);
 			}
 			
 			// Update the server.
-			UpdateServer(UPDATE_SERVER_START, DBPrio_Normal);
+			g_srThisServer.UpdateInDB(UPDATE_SERVER_START, DBPrio_Normal);
 		}
 		else 
 		{
@@ -579,7 +737,7 @@ void T_OnServerSearchResultsReceived(Handle owner, Handle hQuery, const char[] s
 				return;
 			}
 			else // Register the server with the Server-ID.
-				RegisterServer();
+				g_srThisServer.Register();
 		}
 		
 		// Load all other servers
@@ -830,6 +988,22 @@ void GetServerInfo()
 			g_srThisServer.bShowInServerList
 		);
 	}
+}
+
+any[] GetServerByIndex(int index)
+{
+	static Server srServer;
+	g_hOtherServers.GetArray(index, srServer, sizeof(srServer));
+	
+	return srServer;
+}
+
+any[] GetAdvertisementByIndex(int index)
+{
+	static Advertisement advAdvertisement;
+	g_hAdvertisements.GetArray(index, advAdvertisement, sizeof(advAdvertisement));
+	
+	return advAdvertisement;
 }
 
 // From smlib: https://github.com/bcserv/smlib/blob/master/scripting/include/smlib/strings.inc#L185-L233   -  Thanks :)

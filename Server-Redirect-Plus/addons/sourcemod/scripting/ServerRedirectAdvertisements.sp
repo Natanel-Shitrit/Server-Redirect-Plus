@@ -77,12 +77,14 @@ public Action OnClientSayCommand(int client, const char[] command, const char[] 
 					
 					sTranslationName = TRANSLATION_NAME_PLAYER_RANGE;
 					
-					int iServerSteamAIDToAdvertise = GetServerIndexByServerID(g_advToEdit.iServerSteamAIDToAdvertise);
+					int iServerIndex = GetServerIndexByServerID(g_advToEdit.iServerSteamAIDToAdvertise);
+					Server srServer;
+					srServer = GetServerByIndex(iServerIndex);
 					
 					// Old value of UPDATE_PLAYER_RANGE
 					Format(sOldValue, sizeof(sOldValue), "%d|%d", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
 					
-					g_advToEdit.iPlayersRange = GetPlayerRangeFromString(args, (iServerSteamAIDToAdvertise >= 0 ? g_srOtherServers[iServerSteamAIDToAdvertise].iMaxPlayers : MaxClients));
+					g_advToEdit.iPlayersRange = GetPlayerRangeFromString(args, (iServerIndex >= 0 ? srServer.iMaxPlayers : MaxClients));
 					
 					// New value of UPDATE_PLAYER_RANGE
 					Format(sNewValue, sizeof(sNewValue), "%d|%d", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
@@ -217,8 +219,8 @@ void EditAdvertisementPropertiesMenu(int client)
 	mAddAdvertisement.ExitButton = true;
 	
 	mAddAdvertisement.Display(client, MENU_TIME_FOREVER);
-	
 }
+
 
 int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction action, int client, int Clicked)
 {
@@ -267,7 +269,7 @@ int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction action, in
 					
 					if(!(iErrorID = IsValidAdvertisement(g_advToEdit)))
 					{
-						bNewAdvertisement ? AddAdvertisementToDB() : UpdateAdvertisementDB(g_advToEdit.iAdvID);		// Add / Edit adv
+						bNewAdvertisement ? g_advToEdit.AddToDB() : g_advToEdit.UpdateOnDB();
 						g_advToEdit.Reset();
 					}
 					else
@@ -284,7 +286,7 @@ int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction action, in
 						EditAdvertisementPropertiesMenu(client);
 					}
 					else
-						DeleteAdvertisementDB(g_advToEdit.iAdvID);
+						g_advToEdit.DeleteFromDB();
 				}
 			}
 			
@@ -295,9 +297,13 @@ int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction action, in
 			}
 		}
 		case MenuAction_Cancel:
+		{
 			OpenEditServerRedirectAdvertisementsMenu(client);
+		}
 		case MenuAction_End:
+		{
 			delete AddAdvertisementMenu;
+		}
 	}
 }
 
@@ -322,7 +328,10 @@ int SelectServerToAdvMenuHandler(Menu SelectServerToAdv, MenuAction action, int 
 			}
 			else
 			{
-				g_advToEdit.iServerSteamAIDToAdvertise = g_srOtherServers[StringToInt(sBuffer)].iServerSteamAID;
+				Server srServer;
+				srServer = GetServerByIndex(StringToInt(sBuffer));
+				g_advToEdit.iServerSteamAIDToAdvertise = srServer.iServerSteamAID;
+				
 				EditAdvertisementPropertiesMenu(client);
 			}
 		}
@@ -338,38 +347,43 @@ int LoadMenuAdvertisements(Menu hMenuToAdd)
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadMenuAdvertisements");
 	
+	Advertisement advCurrentAdvertisement;
+	Server srAdvertisementServer;
 	int iCurrentAdvertisement;
 	char sBuffer[128];
 	
-	for (iCurrentAdvertisement = 0; iCurrentAdvertisement < MAX_ADVERTISEMENTS; iCurrentAdvertisement++) 
+	for (iCurrentAdvertisement = 0; iCurrentAdvertisement < g_hAdvertisements.Length; iCurrentAdvertisement++) 
 	{
-		if(g_advAdvertisements[iCurrentAdvertisement].iServerSteamAIDToAdvertise != 0)
+		advCurrentAdvertisement = GetAdvertisementByIndex(iCurrentAdvertisement);
+		
+		if(advCurrentAdvertisement.iServerSteamAIDToAdvertise != 0)
 		{
-			int iServerIndex = GetServerIndexByServerID(g_advAdvertisements[iCurrentAdvertisement].iServerSteamAIDToAdvertise);
+			int iServerIndex = GetServerIndexByServerID(advCurrentAdvertisement.iServerSteamAIDToAdvertise);
+			srAdvertisementServer = GetServerByIndex(iServerIndex);
 			
 			char sServerName[32], sAdvMessage[32];
-			CopyStringWithDots(sAdvMessage, sizeof(sAdvMessage), g_advAdvertisements[iCurrentAdvertisement].sMessageContent);
+			CopyStringWithDots(sAdvMessage, sizeof(sAdvMessage), advCurrentAdvertisement.sMessageContent);
 			
-			if(iServerIndex != -1 && g_advAdvertisements[iCurrentAdvertisement].bActive)
-				CopyStringWithDots(sServerName, sizeof(sServerName), g_srOtherServers[iServerIndex].sServerName);
+			if(iServerIndex != -1 && advCurrentAdvertisement.bActive)
+				CopyStringWithDots(sServerName, sizeof(sServerName), srAdvertisementServer.sServerName);
 			else
 			{
 				strcopy(sServerName, sizeof(sServerName), "*NOT ACTIVE*");
 				
 				LogError("%s #ERR: Couldn't find the server you are trying to advertise! (Server-ID - %d (%d), advertisement index - %d, Active - %b)",
 					PREFIX_NO_COLOR,
-					g_advAdvertisements[iCurrentAdvertisement].iServerSteamAIDToAdvertise,
+					advCurrentAdvertisement.iServerSteamAIDToAdvertise,
 					iServerIndex,
 					iCurrentAdvertisement,
-					g_advAdvertisements[iCurrentAdvertisement].bActive
+					advCurrentAdvertisement.bActive
 				);
 			}
 			
 			Format(sBuffer, sizeof(sBuffer), "%s (ID %d - %s) | %s",
-			sServerName,
-			g_advAdvertisements[iCurrentAdvertisement].iServerSteamAIDToAdvertise,
-			g_advAdvertisements[iCurrentAdvertisement].iRepeatTime > 0 ? "LOOP" : g_advAdvertisements[iCurrentAdvertisement].iRepeatTime == -1 ? "MAP" : "PLAYERS",
-			sAdvMessage
+				sServerName,
+				advCurrentAdvertisement.iServerSteamAIDToAdvertise,
+				advCurrentAdvertisement.iRepeatTime > 0 ? "LOOP" : advCurrentAdvertisement.iRepeatTime == -1 ? "MAP" : "PLAYERS",
+				sAdvMessage
 			);
 			
 			char sAdvID[5];
@@ -422,115 +436,64 @@ void T_OnAdvertisementsRecive(Handle owner, Handle hQuery, const char[] sError, 
 		
 	if(hQuery != INVALID_HANDLE)
 	{
+		ArrayList hAdvertisements = new ArrayList(sizeof(Advertisement));
 		char sRangeString[6];
-		int iCurrentAdvertisement;
 		
-		for (iCurrentAdvertisement = 0; iCurrentAdvertisement < MAX_ADVERTISEMENTS && SQL_FetchRow(hQuery); iCurrentAdvertisement++) 
+		while(SQL_FetchRow(hQuery)) 
 		{
-			g_advAdvertisements[iCurrentAdvertisement].iAdvID						= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_ID						);
-			g_advAdvertisements[iCurrentAdvertisement].iServerSteamAIDToAdvertise 	= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_SERVER_ID_TO_ADVERTISE	);
-			g_advAdvertisements[iCurrentAdvertisement].iRepeatTime 					= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_REPEAT_TIME				);
-			g_advAdvertisements[iCurrentAdvertisement].iCoolDownTime 				= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_COOLDOWN_TIME			);
+			Advertisement advCurrentAdvertisement;
 			
-			int iServerIndex = GetServerIndexByServerID(g_advAdvertisements[iCurrentAdvertisement].iServerSteamAIDToAdvertise);
+			advCurrentAdvertisement.iAdvID						= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_ID						);
+			advCurrentAdvertisement.iServerSteamAIDToAdvertise 	= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_SERVER_ID_TO_ADVERTISE	);
+			advCurrentAdvertisement.iRepeatTime 				= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_REPEAT_TIME				);
+			advCurrentAdvertisement.iCoolDownTime 				= SQL_FetchInt(hQuery, SQL_FIELD_ADVERTISEMENT_COOLDOWN_TIME			);
+			
+			int iServerIndex = GetServerIndexByServerID(advCurrentAdvertisement.iServerSteamAIDToAdvertise);
 			
 			if(iServerIndex != -1)
 			{
-				g_advAdvertisements[iCurrentAdvertisement].bActive = true;
+				Server srServer;
+				srServer = GetServerByIndex(iServerIndex);
+				
+				advCurrentAdvertisement.bActive = true;
 				
 				SQL_FetchString(hQuery, SQL_FIELD_ADVERTISEMENT_PLAYER_RANGE, sRangeString, sizeof(sRangeString));
-				SQL_FetchString(hQuery, SQL_FIELD_ADVERTISEMENT_MESSAGE		, g_advAdvertisements[iCurrentAdvertisement].sMessageContent, sizeof(g_advAdvertisements[].sMessageContent));
+				SQL_FetchString(hQuery, SQL_FIELD_ADVERTISEMENT_MESSAGE		, advCurrentAdvertisement.sMessageContent, sizeof(advCurrentAdvertisement.sMessageContent));
 				
-				g_advAdvertisements[iCurrentAdvertisement].iPlayersRange = GetPlayerRangeFromString(sRangeString, g_srOtherServers[iServerIndex].iMaxPlayers); 
+				advCurrentAdvertisement.iPlayersRange = GetPlayerRangeFromString(sRangeString, srServer.iMaxPlayers); 
 			}
 			else
 			{
-				g_advAdvertisements[iCurrentAdvertisement].bActive = false;
+				advCurrentAdvertisement.bActive = false;
 				
-				LogError("%s #ERR: Couldn't find the server you are trying to advertise! (Server-ID - %d, advertisement index - %d)",
+				LogError("%s #ERR: Couldn't find the server you are trying to advertise! (Server-ID - %d)",
 					PREFIX_NO_COLOR,
-					g_advAdvertisements[iCurrentAdvertisement].iServerSteamAIDToAdvertise,
-					iCurrentAdvertisement
+					advCurrentAdvertisement.iServerSteamAIDToAdvertise
 				);
 			}
 			
 			if(g_cvPrintDebug.BoolValue)
-				LogMessage("[T_OnAdvertisementsRecive -> LOOP] Advertisement %d (Index: %d): iServerSteamAIDToAdvertise - %d, iRepeatTime - %d, iCoolDownTime - %d, sMessageContent - %s",
-					g_advAdvertisements[iCurrentAdvertisement].iAdvID,
-					iCurrentAdvertisement,
-					g_advAdvertisements[iCurrentAdvertisement].iServerSteamAIDToAdvertise,
-					g_advAdvertisements[iCurrentAdvertisement].iRepeatTime,
-					g_advAdvertisements[iCurrentAdvertisement].iCoolDownTime,
-					g_advAdvertisements[iCurrentAdvertisement].sMessageContent
+				LogMessage("[T_OnAdvertisementsRecive -> LOOP] Advertisement %d: iServerSteamAIDToAdvertise - %d, iRepeatTime - %d, iCoolDownTime - %d, sMessageContent - %s",
+					advCurrentAdvertisement.iAdvID,
+					advCurrentAdvertisement.iServerSteamAIDToAdvertise,
+					advCurrentAdvertisement.iRepeatTime,
+					advCurrentAdvertisement.iCoolDownTime,
+					advCurrentAdvertisement.sMessageContent
 				);
+				
+			hAdvertisements.PushArray(advCurrentAdvertisement, sizeof(advCurrentAdvertisement));
 		}
 		
-		ClearAdvertisements(iCurrentAdvertisement);
+		if(g_hAdvertisements)
+			delete g_hAdvertisements;
 		
-		if(g_cvPrintDebug.BoolValue && !iCurrentAdvertisement)
+		g_hAdvertisements = hAdvertisements;
+		
+		if(g_cvPrintDebug.BoolValue && !g_hAdvertisements.Length)
 			LogError("No Advertisements found in DB.");
 	}
 	else
 		SetFailState("Couldn't get server advertisements, Error: %s", sError);
-}
-
-// Add Advertisement to DB
-void AddAdvertisementToDB()
-{
-	char sPlayersRange[6];
-	Format(sPlayersRange, sizeof(sPlayersRange), "%d|%d", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
-	
-	DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_advertisements`(`server_id`, `server_id_to_adv`, `adv_repeat_time`, `adv_cooldown_time`, `adv_message`, `adv_players_range`) VALUES (%d, %d, %d, %d, '%s', '%s')",
-	g_srThisServer.iServerSteamAID,
-	g_advToEdit.iServerSteamAIDToAdvertise,
-	g_advToEdit.iRepeatTime,
-	g_advToEdit.iCoolDownTime,
-	g_advToEdit.sMessageContent,
-	sPlayersRange
-	);
-	
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage("Query: %s", Query);
-	
-	DB.Query(T_UpdateAdvertisementQuery, Query);
-}
-
-// Update Advertisement in the DB
-void UpdateAdvertisementDB(int iAdvertisement)
-{
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- UpdateAdvertisementDB | iAdvertisement = %d", iAdvertisement);
-	
-	char sPlayersRange[6];
-	Format(sPlayersRange, sizeof(sPlayersRange), "%d|%d", g_advToEdit.iPlayersRange[0], g_advToEdit.iPlayersRange[1]);
-	
-	DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `server_id_to_adv` = %d, `adv_repeat_time` = %d, `adv_cooldown_time` = %d, `adv_players_range` = '%s', `adv_message` = '%s' WHERE `id` = %d",
-	g_advToEdit.iServerSteamAIDToAdvertise,
-	g_advToEdit.iRepeatTime,
-	g_advToEdit.iCoolDownTime,
-	sPlayersRange,
-	g_advToEdit.sMessageContent,
-	g_advToEdit.iAdvID
-	);
-	
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage("Query: %s", Query);
-	
-	DB.Query(T_UpdateAdvertisementQuery, Query, false);
-}
-
-// Delete Advertisement from the DB
-void DeleteAdvertisementDB(int iAdvertisement)
-{
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- DeleteAdvertisementDB | iAdvertisement = %d", iAdvertisement);	
-	
-	Format(Query, sizeof(Query), "DELETE FROM `server_redirect_advertisements` WHERE `id` = %d", iAdvertisement);	
-	
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage("Query: %s", Query);
-	
-	DB.Query(T_UpdateAdvertisementQuery, Query, false);
 }
 
 // DB callback
@@ -543,26 +506,6 @@ void T_UpdateAdvertisementQuery(Handle owner, Handle hQuery, const char[] sError
 		LoadAdvertisements();
 	else
 		LogError("Error in T_FakeFastQuery: %s", sError);
-}
-
-void UpdateAdvertisementsSteamID(int iOldServerSteamID)
-{
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- UpdateAdvertisementsSteamID | iOldServerSteamID = %d", iOldServerSteamID);	
-	
-	Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `server_id_to_adv` = %d WHERE `server_id_to_adv` = %d", g_srThisServer.iServerSteamAID, iOldServerSteamID);
-	
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage("`server_id_to_adv` Query: %s", Query);
-	
-	DB.Query(T_FakeFastQuery, Query);
-	
-	Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `server_id` = %d WHERE `server_id` = %d", g_srThisServer.iServerSteamAID, iOldServerSteamID);
-	
-	if(g_cvPrintDebug.BoolValue)
-		LogMessage("`server_id_to_adv` Query: %s", Query);
-	
-	DB.Query(T_FakeFastQuery, Query);
 }
 
 //===================[ HELPING ]=====================//
@@ -579,20 +522,26 @@ void PostAdvertisement(int iServerID, int iAdvertisementMode = ADVERTISEMENT_LOO
 	// If we still didn't find the advertisement, do not proceed.
 	if(iAdvertisementIndex == -1)
 		return;
-		
+	
+	Advertisement advAdvertisementToPost;
+	advAdvertisementToPost = GetAdvertisementByIndex(iAdvertisementIndex);
+	
 	// If the advertisement is not active, do not proceed.
-	if(!g_advAdvertisements[iAdvertisementIndex].bActive)
+	if(!advAdvertisementToPost.bActive)
 		return;
 	
 	// We are sure now that we have an advertisement to post and it's active, proceed.
 	char sMessageContent[512];
-	strcopy(sMessageContent, sizeof(sMessageContent), g_advAdvertisements[iAdvertisementIndex].sMessageContent);
+	strcopy(sMessageContent, sizeof(sMessageContent), advAdvertisementToPost.sMessageContent);
 
 	// Get Server index.
 	int iServerIndex = GetServerIndexByServerID(iServerID);
-		
+	
+	Server srServer;
+	srServer = GetServerByIndex(iServerIndex);
+	
 	// Skip if the server is down (unless we want to post offline servers).
-	if(!g_bAdvertiseOfflineServers && !g_srOtherServers[iServerIndex].bServerStatus)
+	if(!g_bAdvertiseOfflineServers && !srServer.bServerStatus)
 	{
 		if(g_cvPrintDebug.BoolValue)
 			LogMessage("Not advertising because server is offline, change 'AdvertiseOfflineServers' to '1' in the plugin cfg to advertise offline servers!");
@@ -601,19 +550,19 @@ void PostAdvertisement(int iServerID, int iAdvertisementMode = ADVERTISEMENT_LOO
 	}
 	
 	// Skip if the advertisement is on cooldown.
-	if (g_advAdvertisements[iAdvertisementIndex].iAdvertisedTime != 0 &&
-		g_advAdvertisements[iAdvertisementIndex].iCoolDownTime != 0 &&
-		g_advAdvertisements[iAdvertisementIndex].iAdvertisedTime + g_advAdvertisements[iAdvertisementIndex].iCoolDownTime > GetTime())
+	if (advAdvertisementToPost.iAdvertisedTime != 0 &&
+		advAdvertisementToPost.iCoolDownTime != 0 &&
+		advAdvertisementToPost.iAdvertisedTime + advAdvertisementToPost.iCoolDownTime > GetTime())
 		return;
 		
 	// Save the time when advertising.
-	g_advAdvertisements[iAdvertisementIndex].iAdvertisedTime = GetTime();
+	advAdvertisementToPost.iAdvertisedTime = GetTime();
 	
 	// Replace strings to show the server data
 	FormatStringWithServerProperties(sMessageContent, sizeof(sMessageContent), iServerIndex);
 		
 	// If the server is Hidden, show only to authorized clients.		
-	if(!g_srOtherServers[iServerIndex].bShowInServerList)
+	if(!srServer.bShowInServerList)
 	{
 		Format(sMessageContent, sizeof(sMessageContent), "%s %t", sMessageContent, "ServerHiddenMenu");
 		
@@ -631,17 +580,7 @@ void LoadAdvToEdit(int iAdvID)
 	if(g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadAdvToEdit | iAdvID = %d", iAdvID);
 	
-	g_advToEdit = g_advAdvertisements[iAdvID];
-}
-
-// Clearing the advertisement array from a given position to the end.
-void ClearAdvertisements(int iStartAdvertisement)
-{
-	Advertisement advClean;
-	
-	// Go throw all the advertisements (from where we told to start) and clean them 1 by 1 to the end.
-	for (int iCurrentAdvertisement = iStartAdvertisement; iCurrentAdvertisement < MAX_ADVERTISEMENTS; iCurrentAdvertisement++)
-		g_advAdvertisements[iCurrentAdvertisement] = advClean;
+	g_advToEdit = GetAdvertisementByIndex(iAdvID);
 }
 
 // Get the Player-Range for the advertisement from the string stored in the DB
@@ -682,10 +621,14 @@ void PrintToChatNewLine(int client, char[] sMessage)
 // Returning the advertisement index given the server and the advertisement mode
 int FindAdvertisement(int iServer, int iAdvertisementMode)
 {
-	for (int iCurrentAdvertisement = 0; iCurrentAdvertisement < MAX_ADVERTISEMENTS; iCurrentAdvertisement++)
-		if (g_advAdvertisements[iCurrentAdvertisement].iServerSteamAIDToAdvertise == iServer &&
-			g_advAdvertisements[iCurrentAdvertisement].iRepeatTime == iAdvertisementMode)
+	Advertisement advCurrentAdvertisement;
+	
+	for (int iCurrentAdvertisement = 0; iCurrentAdvertisement < g_hAdvertisements.Length; iCurrentAdvertisement++)
+	{
+		advCurrentAdvertisement = GetAdvertisementByIndex(iCurrentAdvertisement);
+		if (advCurrentAdvertisement.iServerSteamAIDToAdvertise == iServer && advCurrentAdvertisement.iRepeatTime == iAdvertisementMode)
 			return iCurrentAdvertisement;
+	}
 			
 	return -1;
 }
@@ -694,9 +637,15 @@ int FindAdvertisement(int iServer, int iAdvertisementMode)
 int GetServerIndexByServerID(int iServerSteamAID)
 {
 	if (iServerSteamAID != 0)
-		for (int iCurrentServer = 0; iCurrentServer < MAX_SERVERS; iCurrentServer++)
-			if(g_srOtherServers[iCurrentServer].iServerSteamAID == iServerSteamAID)
+	{
+		Server srCurrentServer;
+		for (int iCurrentServer = 0; iCurrentServer < g_hOtherServers.Length; iCurrentServer++)
+		{
+			srCurrentServer = GetServerByIndex(iCurrentServer);
+			if(srCurrentServer.iServerSteamAID == iServerSteamAID)
 				return iCurrentServer;
+		}
+	}
 			
 	return -1;
 }
@@ -704,11 +653,14 @@ int GetServerIndexByServerID(int iServerSteamAID)
 // Returns 0 if the Advertisement is valid (otherwise the Error-ID)
 int IsValidAdvertisement(Advertisement advToCheck)
 {
-	int iErrors, iServerSteamAIDToAdvertise = GetServerIndexByServerID(advToCheck.iServerSteamAIDToAdvertise);
+	int iErrors, iServerIndex = GetServerIndexByServerID(advToCheck.iServerSteamAIDToAdvertise);
 	
 	// if the the server the player wants to advertise is invalid.
-	if(iServerSteamAIDToAdvertise == -1)
+	if(iServerIndex == -1)
 		iErrors |= (1 << ERROR_INVALID_SERVER_ID);
+	
+	Server srServerToCheck;
+	srServerToCheck = GetServerByIndex(iServerIndex);
 	
 	// If the Advertisement message is empty.
 	if(StrEqual(advToCheck.sMessageContent, "", false))
@@ -716,10 +668,10 @@ int IsValidAdvertisement(Advertisement advToCheck)
 	
 	if(advToCheck.iRepeatTime == ADVERTISEMENT_PLAYERS_RANGE)
 	{
-		if(!(0 <= advToCheck.iPlayersRange[0] <= (iServerSteamAIDToAdvertise >= 0 ? g_srOtherServers[iServerSteamAIDToAdvertise].iMaxPlayers : MaxClients)))
+		if(!(0 <= advToCheck.iPlayersRange[0] <= (iServerIndex >= 0 ? srServerToCheck.iMaxPlayers : MaxClients)))
 			iErrors |= (1 << ERROR_INVALID_PLAYER_RANGE_START);
 		
-		if(!(0 <= advToCheck.iPlayersRange[1] <= (iServerSteamAIDToAdvertise >= 0 ? g_srOtherServers[iServerSteamAIDToAdvertise].iMaxPlayers : MaxClients)))
+		if(!(0 <= advToCheck.iPlayersRange[1] <= (iServerIndex >= 0 ? srServerToCheck.iMaxPlayers : MaxClients)))
 			iErrors |= (1 << ERROR_INVALID_PLAYER_RANGE_END);
 			
 		if(!(iErrors & (3 << ERROR_INVALID_PLAYER_RANGE_START)) && advToCheck.iPlayersRange[0] > advToCheck.iPlayersRange[1])
