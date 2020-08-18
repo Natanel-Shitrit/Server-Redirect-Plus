@@ -41,8 +41,8 @@ void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError, any bF
 			srNewServer.bHiddenSlots	  = view_as<bool>(SQL_FetchInt(hQuery, SQL_FIELD_SERVER_HIDDEN_SLOTS));
 			srNewServer.bIncludeBots 	  = view_as<bool>(SQL_FetchInt(hQuery, SQL_FIELD_SERVER_INCLUD_BOTS));
 			
-			SQL_FetchString(hQuery, SQL_FIELD_SERVER_NAME	 , srNewServer.sServerName	  , sizeof(srNewServer.sServerName)		);
-			SQL_FetchString(hQuery, SQL_FIELD_SERVER_CATEGORY, srNewServer.sServerCategory, sizeof(srNewServer.sServerCategory)	);
+			SQL_FetchString(hQuery, SQL_FIELD_SERVER_NAME, srNewServer.sServerName, sizeof(srNewServer.sServerName));
+			SQL_FetchString(hQuery, SQL_FIELD_SERVER_CATEGORY, srNewServer.sCategoriesString, sizeof(srNewServer.sCategoriesString));
 			
 			// if the server is offline we don't want to load real-time data because it's not real-time (outdated),
 			// And we don't want to advertise Map-Changes / Player-Range Advertisements.
@@ -79,6 +79,7 @@ void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError, any bF
 				}
 			}
 			
+			srNewServer.Init();
 			hUpdatedServers.PushArray(srNewServer, sizeof(srNewServer));
 			
 			if (g_cvPrintDebug.BoolValue)
@@ -87,7 +88,7 @@ void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError, any bF
 					srNewServer.bServerStatus,
 					srNewServer.bShowInServerList,
 					srNewServer.sServerName,
-					srNewServer.sServerCategory,
+					srNewServer.sCategoriesString,
 					srNewServer.sServerMap,
 					srNewServer.iServerIP32,
 					srNewServer.iServerPort,
@@ -213,7 +214,7 @@ int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, int Clic
 			{
 				srServer = GetServerByIndex(StringToInt(sFirstMenuItemInfoBuffer));
 				
-				if(!StrEqual(srServer.sServerCategory, ""))
+				if(!srServer.IsGlobal() || srServer.hServerCategories.Length > 2)
 					Command_ServerList(client, 0);
 			}
 		}
@@ -271,11 +272,7 @@ int ServerInfoMenuHandler(Menu ServerInfoMenu, MenuAction action, int client, in
 		}
 		case MenuAction_Cancel:
 		{
-			// Exit back to the menu (if was in a category - to the category, else - to the main menu)
-			if (!StrEqual(srServer.sServerCategory, "", false))
-				LoadCategoryMenu(client, srServer.sServerCategory);
-			else
-				Command_ServerList(client, 0);
+			Command_ServerList(client, 0);
 		}
 		case MenuAction_End:
 		{
@@ -344,7 +341,7 @@ void SelectServerMainMenu(int client, MenuHandler mMenuHandlerToUse, const char[
 	}
 		
 	int iNumOfPublicCategories 	= LoadMenuCategories(mServerList, client);
-	int iNumOfPublicServers 	= LoadMenuServers(mServerList, client, sMenuFormat, "", iTitleLength);
+	int iNumOfPublicServers 	= LoadMenuServers(mServerList, client, sMenuFormat, "GLOBAL", iTitleLength);
 	
 	if(iNumOfPublicServers + iNumOfPublicCategories == 0)
 		CPrintToChat(client, "%t", "NoServersFound", PREFIX);
@@ -370,7 +367,7 @@ int LoadMenuServers(Menu mMenu, int client, const char[] sMenuFormat, const char
 	{
 		srServer = GetServerByIndex(iCurrentServer);
 		
-		if (StrEqual(srServer.sServerName, "", false) || !StrEqual(srServer.sServerCategory, sCategory, false) || !ClientCanAccessToServer(client, iCurrentServer))
+		if (StrEqual(srServer.sServerName, "", false) || !srServer.InCategory(sCategory) || !ClientCanAccessToServer(client, iCurrentServer))
 			continue;
 		
 		strcopy(sServerShowString, iStringSize, sMenuFormat);
@@ -481,8 +478,11 @@ void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, int iSe
 			ReplaceString(sShortServerName, sizeof(sShortServerName), g_sPrefixRemover, "", true);
 		}
 		
+		char sServerCategory[MAX_CATEGORY_NAME_LENGHT];
+		srServer.GetCategoryName(0, sServerCategory, sizeof(sServerCategory));
+		
 		// SERVER CATEGORY - MAX SIZE 64
-		iClaculateBuffer = CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty, srServer.sServerCategory);
+		iClaculateBuffer = CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty, sServerCategory);
 		iClaculateBuffer *= ReplaceString(sToFormat, iStringSize, "{category}", sReplaceBuffer, false);
 		iNumOfFreeCharacters += iClaculateBuffer;
 		
@@ -518,25 +518,34 @@ int LoadMenuCategories(Menu mMenu, int client)
 	int iNumOfPublicCategories = 0;
 	Server srServer;
 	
-	for (int iCurrentServer = 0; iCurrentServer < g_hAdvertisements.Length; iCurrentServer++)
+	for (int iCurrentServer = 0; iCurrentServer < g_hOtherServers.Length; iCurrentServer++)
 	{
 		srServer = GetServerByIndex(iCurrentServer);
 		
-		if (StrEqual(srServer.sServerCategory, "", false) || CategoryAlreadyExist(iCurrentServer) || !ClientCanAccessToServer(client, iCurrentServer))
+		if(!ClientCanAccessToServer(client, iCurrentServer))
 			continue;
 		
-		char sBuffer[MAX_CATEGORY_NAME_LENGHT];
-		Format(sBuffer, sizeof(sBuffer), "[C] %s", srServer.sServerCategory);
-		
-		mMenu.AddItem(sBuffer, sBuffer);
-		iNumOfPublicCategories++;
+		for (int iCurrentCategory = 0; iCurrentCategory < srServer.hServerCategories.Length; iCurrentCategory++)
+		{
+			char sCurrentCategory[MAX_CATEGORY_NAME_LENGHT];
+			srServer.GetCategoryName(iCurrentCategory, sCurrentCategory, sizeof(sCurrentCategory));
+			
+			if (StrEqual(sCurrentCategory, "GLOBAL") || CategoryAlreadyExist(iCurrentServer, sCurrentCategory))
+				continue;
+			
+			char sBuffer[MAX_CATEGORY_NAME_LENGHT];
+			Format(sBuffer, sizeof(sBuffer), "[C] %s", sCurrentCategory);
+			
+			mMenu.AddItem(sBuffer, sBuffer);
+			iNumOfPublicCategories++;
+		}
 	}
 	
 	return iNumOfPublicCategories;
 }
 
 // Check if Category already exists
-bool CategoryAlreadyExist(int iServer)
+bool CategoryAlreadyExist(int iServer, const char[] sCategory)
 {
 	Server srServerToStop, sCurrentServer;
 	srServerToStop = GetServerByIndex(iServer);
@@ -544,7 +553,7 @@ bool CategoryAlreadyExist(int iServer)
 	for (int iCurrentServer = 0; iCurrentServer < iServer; iCurrentServer++)
 	{
 		sCurrentServer = GetServerByIndex(iCurrentServer);
-		if (StrEqual(sCurrentServer.sServerCategory, srServerToStop.sServerCategory, false))
+		if (sCurrentServer.InCategory(sCategory))
 			return true;
 	}
 	

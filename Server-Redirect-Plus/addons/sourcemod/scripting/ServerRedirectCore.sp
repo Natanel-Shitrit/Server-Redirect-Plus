@@ -15,7 +15,8 @@
 
 // Lenght as used in the Database.
 #define MAX_SERVER_NAME_LENGHT 245
-#define MAX_CATEGORY_NAME_LENGHT 64
+#define MAX_CATEGORY_NAME_LENGHT 32
+#define MAX_CATEGORY_COUNT 8
 
 // Regex string
 #define REGEX_COUNT_STRINGS "{(shortname|longname|category|map)}"
@@ -124,7 +125,9 @@ enum
 //=======[ SERVER STRUCT ]======//
 enum struct Server
 {
-	char sServerCategory[MAX_CATEGORY_NAME_LENGHT];
+	ArrayList hServerCategories;
+	
+	char sCategoriesString[MAX_CATEGORY_COUNT * MAX_CATEGORY_NAME_LENGHT];
 	char sServerName[MAX_SERVER_NAME_LENGHT];
 	char sServerMap[PLATFORM_MAX_PATH];
 	
@@ -141,9 +144,18 @@ enum struct Server
 	bool bHiddenSlots;
 	bool bIncludeBots;
 	
+	void Init()
+	{
+		if(this.hServerCategories)
+			delete this.hServerCategories;
+		
+		this.hServerCategories = new ArrayList(ByteCountToCells(MAX_CATEGORY_NAME_LENGHT));
+		this.AddCategories();
+	}
+	
 	void Reset()
 	{
-		this.sServerCategory = "";
+		this.Init();
 		this.sServerName 	 = "";
 		this.sServerMap 	 = "";
 		
@@ -205,16 +217,16 @@ enum struct Server
 		if (g_cvPrintDebug.BoolValue)
 			LogMessage(" <-- Server.Register() | iServerSteamAID = %d", this.iServerSteamAID);
 		
-		DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_servers` (`server_backup_id`, `server_steam_id`, `server_name`, `server_category`, `server_ip`, `server_port`, `server_status`, `server_map`, `number_of_players`, `max_players`, `reserved_slots`, `hidden_slots`, `server_visible`, `timeout_time`) VALUES (%d, %d, '%s', '%s', %d, %d, %d, '%s', %d, %d, %d, %d, %b, %d)", 
+		DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_servers` (`server_backup_id`, `server_steam_id`, `server_name`, `server_categories`, `server_ip`, `server_port`, `server_status`, `server_map`, `number_of_players`, `max_players`, `reserved_slots`, `hidden_slots`, `server_visible`, `timeout_time`) VALUES (%d, %d, '%s', '%s', %d, %d, %d, '%s', %d, %d, %d, %d, %b, %d)", 
 			this.iServerBackupID,
 			this.iServerSteamAID,
-			this.sServerName, 
-			this.sServerCategory, 
-			this.iServerIP32, 
-			this.iServerPort, 
-			this.bServerStatus, 
-			this.sServerMap, 
-			this.iNumOfPlayers, 
+			this.sServerName,
+			this.sCategoriesString,
+			this.iServerIP32,
+			this.iServerPort,
+			this.bServerStatus,
+			this.sServerMap,
+			this.iNumOfPlayers,
 			this.iMaxPlayers,
 			this.iReservedSlots,
 			this.bHiddenSlots,
@@ -266,8 +278,9 @@ enum struct Server
 			}
 			case UPDATE_SERVER_START:
 			{
-				DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_name` = '%s', `server_ip` = %d, `server_port` = %d, `server_status` = %d, `server_visible` = %d, `max_players` = %d, `reserved_slots` = %d, `hidden_slots` = %b, `bots_included` = %b, `server_map` = '%s', `timeout_time` = %d WHERE `server_steam_id` = %d",
+				DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_name` = '%s', `server_categories` = '%s', `server_ip` = %d, `server_port` = %d, `server_status` = %d, `server_visible` = %d, `max_players` = %d, `reserved_slots` = %d, `hidden_slots` = %b, `bots_included` = %b, `server_map` = '%s', `timeout_time` = %d WHERE `server_steam_id` = %d",
 					this.sServerName,
+					this.sCategoriesString,
 					this.iServerIP32,
 					this.iServerPort,
 					this.bServerStatus,
@@ -306,6 +319,43 @@ enum struct Server
 			LogMessage("`server_id_to_adv` Query: %s", Query);
 		
 		DB.Query(T_FakeFastQuery, Query);
+	}
+	
+	void AddCategories()
+	{
+		char sCategories[MAX_CATEGORY_COUNT][MAX_CATEGORY_NAME_LENGHT];
+		ExplodeString(this.sCategoriesString, ",", sCategories, sizeof(sCategories), sizeof(sCategories[]));
+		
+		for (int iCurrentCategory = 0; iCurrentCategory < sizeof(sCategories) && !StrEqual(sCategories[iCurrentCategory], ""); iCurrentCategory++)
+			this.hServerCategories.PushString(sCategories[iCurrentCategory]);
+	}
+	
+	void DebugPrint_Categories()
+	{
+		char sCategory[MAX_CATEGORY_NAME_LENGHT];
+		
+		PrintToChatAll("%s '%s' Categories:", PREFIX, this.sServerName);
+		
+		for (int iCurrentCategory = 0; iCurrentCategory < this.hServerCategories.Length; iCurrentCategory++)
+		{
+			this.hServerCategories.GetString(iCurrentCategory, sCategory, sizeof(sCategory));
+			PrintToChatAll("[%d] %s", iCurrentCategory, sCategory);
+		}
+	}
+	
+	bool IsGlobal()
+	{
+		return this.InCategory("GLOBAL");
+	}
+	
+	bool InCategory(const char[] sCategory)
+	{
+		return (this.hServerCategories.FindString(sCategory) != -1);
+	}
+	
+	void GetCategoryName(int index, char[] sBufferToStoreIn, int iBufferSize)
+	{
+		this.hServerCategories.GetString(index, sBufferToStoreIn, iBufferSize);
 	}
 }
 ArrayList g_hOtherServers;
@@ -660,7 +710,7 @@ void T_OnDBConnected(Database dbMain, const char[] sError, any data)
 		DB = dbMain;
 		
 		// Create Tables
-		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS `server_redirect_servers` (`id` INT NOT NULL AUTO_INCREMENT, `server_backup_id` INT NOT NULL, `server_steam_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_category` VARCHAR(64) NOT NULL, `server_ip` INT NOT NULL DEFAULT '-1', `server_port` INT NOT NULL DEFAULT '0', `server_status` INT NOT NULL DEFAULT '0', `server_visible` INT NOT NULL DEFAULT '1', `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL DEFAULT '0', `reserved_slots` INT NOT NULL DEFAULT '0', `hidden_slots` INT(1) NOT NULL DEFAULT '0', `max_players` INT NOT NULL DEFAULT '0', `bots_included` INT NOT NULL DEFAULT '0', `unix_lastupdate` TIMESTAMP on update CURRENT_TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `timeout_time` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), UNIQUE(`server_steam_id`))", _, DBPrio_High);
+		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS `server_redirect_servers` (`id` INT NOT NULL AUTO_INCREMENT, `server_backup_id` INT NOT NULL, `server_steam_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_categories` VARCHAR(256) NOT NULL, `server_ip` INT NOT NULL DEFAULT '-1', `server_port` INT NOT NULL DEFAULT '0', `server_status` INT NOT NULL DEFAULT '0', `server_visible` INT NOT NULL DEFAULT '1', `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL DEFAULT '0', `reserved_slots` INT NOT NULL DEFAULT '0', `hidden_slots` INT(1) NOT NULL DEFAULT '0', `max_players` INT NOT NULL DEFAULT '0', `bots_included` INT NOT NULL DEFAULT '0', `unix_lastupdate` TIMESTAMP on update CURRENT_TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `timeout_time` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), UNIQUE(`server_steam_id`))", _, DBPrio_High);
 	}
 }
 
@@ -812,7 +862,9 @@ void LoadSettings()
 	kvSettings.GetString("PrefixRemover"		, g_sPrefixRemover					, sizeof(g_sPrefixRemover)					);
 	kvSettings.GetString("ServerListCommands"	, g_sServerListCommands				, sizeof(g_sServerListCommands)				);
 	kvSettings.GetString("ServerName"			, g_srThisServer.sServerName		, sizeof(g_srThisServer.sServerName)		);
-	kvSettings.GetString("ServerCategory"		, g_srThisServer.sServerCategory	, sizeof(g_srThisServer.sServerCategory)	);
+	kvSettings.GetString("ServerCategory"		, g_srThisServer.sCategoriesString	, sizeof(g_srThisServer.sCategoriesString)	);
+	
+	g_srThisServer.Init();
 	
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage("Settings Loaded:\nServerBackupID: %d\nMenuFormat: %s\nServerListCommands: %s\nServerName: %s\nServerCategory: %s\nShowBots: %d\nShowSeverInServerList: %d",
@@ -820,7 +872,7 @@ void LoadSettings()
 			g_sMenuFormat,
 			g_sServerListCommands,
 			g_srThisServer.sServerName,
-			g_srThisServer.sServerCategory,
+			g_srThisServer.sCategoriesString,
 			g_srThisServer.bIncludeBots,
 			g_bShowServerOnServerList
 		);
@@ -978,7 +1030,7 @@ void GetServerInfo()
 		GetIPv4FromIP32(g_srThisServer.iServerIP32, iIP);
 		LogMessage("Name - %s\nCategory - %s\nIP32 - %d\nIP - %s.%s.%s.%s\nPort - %d\nMap - %s\nNumber of players - %d\nMax Players - %d\nshow server - %b", 
 			g_srThisServer.sServerName,
-			g_srThisServer.sServerCategory,
+			g_srThisServer.sCategoriesString,
 			g_srThisServer.iServerIP32,
 			iIP[0], iIP[1], iIP[2], iIP[3],
 			g_srThisServer.iServerPort,
@@ -1057,5 +1109,5 @@ bool String_StartsWith(const char[] str, const char[] subString)
 * 8. Added reserve slot support, override command 'server_redirect_use_reserved_slots' or ROOT admin-flag can see reserved slots.
 * 9. FIX ServerList menu glitching out and not showing part of the servers / next / back buttons.
 * 10. Too many connections to the DB server FIX :)
-*
+* 11. 0.0.0.0 IP BUG resolved.
 */
