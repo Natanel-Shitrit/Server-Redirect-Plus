@@ -38,8 +38,8 @@ Great, Now the plugin should connect to the database.
 Before we start using the plugin let's configure it, navigate to '`/csgo/addons/sourcemod/configs/ServerRedirect/`' and open '`Config.cfg`'.\
 Here's each setting and what it does:
 
-  - `ServerID` - This Server-ID will be saved in the Database (it has to be unique) and it will be used along side the server Steam-ID to identify this specific server (especially when either the name of the server is changed or the ip / port).\
-  Note: This section isn't required for the plugin to run but if you change your server token often you SHOULD use it.
+  - `ServerBackupID` - This Server Backup-ID will be saved in the Database (it has to be unique, no error if you duplicate it but it will cause problems, so just make sure you don't duplicate it) and it will be used to identify the specific server when the server Steam Account-ID has changed.\
+  Note: This section isn't required for the plugin to run. but, without it the server will be deleted from the database on shutdown. (if you change your server token often you it's RECOMMENDED use it).
 
   - `ServerName` - This name will be shown on the Server-List Menu. Leave blank if you want to use your Server Hostname.
   
