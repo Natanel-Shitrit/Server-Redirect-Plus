@@ -18,6 +18,20 @@ To find the latest stable release: ['Server-Redirect+' Releases](https://github.
 Downloading the repository itself is also an option.\
 but, it's not always guaranteed to be stable!
 
+## Requirements / Dependencies:
+To compile and use this plugin you need these dependencies on every server:\
+ - [Sourcemod 1.10+ Compiler.](https://www.sourcemod.net/downloads.php?branch=1.10)
+ - [sm-redirect-core](https://github.com/Wend4r/sm-redirect-core)
+ - [LobbySessionFixer](https://github.com/komashchenko/LobbySessionFixer)
+ - [PTaH](https://github.com/komashchenko/PTaH)
+
+## Compile instructions:
+1. Use 1.10+ sourcemod compiler
+2. Make sure you have all includes: `sourcemod`, `cstrike`, `redirect_core` and `multicolors`.
+3. Make sure `ServerRedirectCore.sp`, `ServerRedirectMenus.sp` and `ServerRedirectAdvertisements.sp` is in the same directory.
+4. You should only compile `ServerRedirectCore.sp`, all other files are included in there.
+5. Have fun 😉
+
 ## Installation and Configuration
 Okay, you have some servers and you want to install this awesome plugin, you came to the right place.
 
