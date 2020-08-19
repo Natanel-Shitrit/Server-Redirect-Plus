@@ -1,7 +1,13 @@
 # Server-Redirect-Plus
 
 ## What is 'Server-Redirect+'?
-'Server-Redirect+' is an interactive, auto-updated Server-List that can contain all of your CS:GO game servers, advertise them and let players hop between them!
+'Server-Redirect+' is an interactive, auto-updated Server-List that can contain all of your CS:GO game servers, advertise them and let players hop between them from a game menu, with just 1 click!
+
+With 'Server-Redirect+' you can see real time information about each server in the server-list.\
+You can categorize, sort and view the servers however you like, with a formattable menus and more features.
+
+Advertise your servers with dynamic advertisements, print the real time information.\
+You can set an interval for the advertisement to post every x seconds and even print on events such as map change or when there are certian number of players in the server.
 
 ## Demonstration Video
 [![Server-Redirect-Plus Demonstration Video](http://img.youtube.com/vi/fOj7ho6Y-6I/0.jpg)](http://www.youtube.com/watch?v=fOj7ho6Y-6I)
@@ -46,8 +52,10 @@ Here's each setting and what it does:
   - `PrefixRemover` - String to remove from the server name (useful for removing prefixes)\
   For example, if i have `PrefixRemover = SomeName ` and `ServerName = SomeName Retake #1` this will result `{shortname}` to be `Retake #1`.
   
-  - `ServerCategory` - Category of the server in the Server-List Menu.\
+  - `ServerCategories` - Categories of the server in the Server-List Menu.\
   The category section helps you organize your servers and improve the user experience.
+  If you want the server to appear in the main menu add `GLOBAL` to the categories 
+  to add multiple commands, separate them with a comma (,).\
   
   - `ShowSeverInServerList` - Whether this server should appear in the Server-List or not.
   
