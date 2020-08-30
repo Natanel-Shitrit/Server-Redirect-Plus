@@ -93,22 +93,23 @@ public void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError,
 				g_srOtherServers[iCurrentServer].iNumOfPlayers 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_PLAYERS);
 				g_srOtherServers[iCurrentServer].iMaxPlayers 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_MAX_PLAYERS);
 				
+				char sOldMap[PLATFORM_MAX_PATH];
+				if (g_bAdvertisementsAreEnabled && !StrEqual(g_srOtherServers[iCurrentServer].sServerMap, "", false))
+					strcopy(sOldMap, sizeof(sOldMap), g_srOtherServers[iCurrentServer].sServerMap);
+				
+				SQL_FetchString(hQuery, SQL_FIELD_SERVER_MAP, g_srOtherServers[iCurrentServer].sServerMap, sizeof(g_srOtherServers[].sServerMap));
+				
 				if(g_bAdvertisementsAreEnabled)
 				{
 					int iServerAdvertisement = FindAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_PLAYERS_RANGE);
 				
 					if (iServerAdvertisement != -1 && g_advAdvertisements[iServerAdvertisement].iPlayersRange[0] < g_srOtherServers[iCurrentServer].iNumOfPlayers < g_advAdvertisements[iServerAdvertisement].iPlayersRange[1])
 						PostAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_PLAYERS_RANGE);
-					
-					char sOldMap[PLATFORM_MAX_PATH];
-					if (!StrEqual(g_srOtherServers[iCurrentServer].sServerMap, "", false))
-						strcopy(sOldMap, sizeof(sOldMap), g_srOtherServers[iCurrentServer].sServerMap);
-				
-					SQL_FetchString(hQuery, SQL_FIELD_SERVER_MAP, g_srOtherServers[iCurrentServer].sServerMap, sizeof(g_srOtherServers[].sServerMap));
 				
 					if (!StrEqual(sOldMap, g_srOtherServers[iCurrentServer].sServerMap))
 						PostAdvertisement(g_srOtherServers[iCurrentServer].iServerID, ADVERTISEMENT_MAP);
 				}
+				
 			}
 			
 			if (g_cvPrintDebug.BoolValue)
