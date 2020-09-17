@@ -1,7 +1,7 @@
-#include <sourcemod>
 #include <steamworks>
 #include <redirect_core>
 #include <multicolors>
+#include <ServerRedirect>
 
 #pragma newdecls required
 #pragma semicolon 1
@@ -16,7 +16,6 @@
 // Lenght as used in the Database.
 #define MAX_SERVER_NAME_LENGHT 245
 #define MAX_CATEGORY_NAME_LENGHT 32
-#define MAX_CATEGORY_COUNT 8
 
 // Regex string
 #define REGEX_COUNT_STRINGS "{(shortname|longname|category|map)}"
@@ -37,10 +36,10 @@ ConVar 	g_cvPrintDebug; 						// Debug Mode Status
 ConVar 	g_cvNetPublicAdr;						// Public IP Adress, could be set manually from srdc launch options
 ConVar 	g_cvReservedSlots;						// Number of reserved slots.
 ConVar 	g_cvHiddenSlots;						// If the reserved slots are hidden or not.
+ConVar 	g_cvSvPassword;							// Server password.
 
 bool 	g_bShowServerOnServerList; 				// Show this server in the Server-List?
 bool 	g_bAdvertisementsAreEnabled; 			// Should we advertise servers?
-bool 	g_bAdvertiseOfflineServers; 			// Should we advertise offline servers?
 
 char 	g_sServerListCommands[256];				// Commands for the Server-List.
 char 	g_sMenuFormat[256]; 					// Menu Server Format
@@ -51,142 +50,58 @@ int 	g_iServerTimeOut;						// The amount of time before this server will be del
 //======[ Settings Related ]====//
 Regex rgCountStrings;
 
-//=======[ ADV TYPE ENUM ]======//
-enum
-{
-	ADVERTISEMENT_PLAYERS_RANGE = -2,  	// USING DEFFRENCE CHECK
-	ADVERTISEMENT_MAP 		 		, 	// USING DEFFRENCE CHECK
-	ADVERTISEMENT_LOOP		 			// USING TIMER
-}
-
-//======[ ADV ERROR ENUM ]======//
-enum
-{
-	// LOOP START
-	ERROR_INVALID_SERVER_ID = 1	,
-	ERROR_EMPTY_MESSAGE_CONTENT	,
-	ERROR_INVALID_PLAYER_RANGE	,
-	ERROR_INVALID_PLAYER_RANGE_START,
-	ERROR_INVALID_PLAYER_RANGE_END	,
-	// LOOP END
-	ERROR_INVALID_LOOP_TIME,
-	ERROR_INVALID_COOLDOWN_TIME
-}
-
-//======[ UPDATE ADV ENUM ]=====//
-enum
-{
-	UPDATE_NOTHING = -1	,
-	UPDATE_LOOP_TIME 	,
-	UPDATE_COOLDOWN_TIME,
-	UPDATE_PLAYER_RANGE ,
-	UPDATE_ADV_MESSAGE
-}
+//======[ UPDATE ADV ARR ]=====//
 int g_iUpdateAdvProprietary[MAXPLAYERS + 1] =  { UPDATE_NOTHING, ... };
-
-//====[ SERVER SEARCH ENUM ]====//
-enum
-{
-	SERVER_SEARCH_BY_STEAM_ID = 0,
-	SERVER_SEARCH_BY_BACKUP_ID
-}
-
-//======[ DB UPDATE ENUM ]======//
-enum
-{
-	UPDATE_SERVER_STEAM_ID,
-	UPDATE_SERVER_PLAYERS,
-	UPDATE_SERVER_STATUS, 
-	UPDATE_SERVER_START
-}
-
-//========[ TABLE STRUCT ]======//
-enum
-{
-	SQL_FIELD_SERVER_BACKUP_ID = 1,
-	SQL_FIELD_SERVER_STEAM_ID,
-	SQL_FIELD_SERVER_NAME,
-	SQL_FIELD_SERVER_CATEGORY,
-	SQL_FIELD_SERVER_IP,
-	SQL_FIELD_SERVER_PORT,
-	SQL_FIELD_SERVER_STATUS,
-	SQL_FIELD_SERVER_VISIBLE,
-	SQL_FIELD_SERVER_MAP,
-	SQL_FIELD_SERVER_PLAYERS,
-	SQL_FIELD_SERVER_RESERVED_SLOTS,
-	SQL_FIELD_SERVER_HIDDEN_SLOTS,
-	SQL_FIELD_SERVER_MAX_PLAYERS,
-	SQL_FIELD_SERVER_INCLUD_BOTS,
-	SQL_FIELD_SERVER_LAST_UPDATE,
-	SQL_FIELD_SERVER_TIMEOUT,
-	SQL_FIELD_SERVER_LAST_UPDATE_UNIX
-}
 
 //=======[ SERVER STRUCT ]======//
 enum struct Server
 {
-	ArrayList hServerCategories;
+	ArrayList hCategories;
 	
-	char sCategoriesString[MAX_CATEGORY_COUNT * MAX_CATEGORY_NAME_LENGHT];
-	char sServerName[MAX_SERVER_NAME_LENGHT];
-	char sServerMap[PLATFORM_MAX_PATH];
+	char sName[MAX_SERVER_NAME_LENGHT];
+	char sPass[PLATFORM_MAX_PATH];
+	char sMap[PLATFORM_MAX_PATH];
 	
 	int iReservedSlots;
 	int iNumOfPlayers;
-	int iServerIP32;
-	int iServerPort;
 	int iMaxPlayers;
-	int iServerSteamAID;
-	int iServerBackupID;
+	int iSteamAID;
+	int iBackupID;
+	int iPort;
+	int iP32;
 	
 	bool bShowInServerList;
-	bool bServerStatus;
 	bool bHiddenSlots;
 	bool bIncludeBots;
+	bool bStatus;
 	
 	void Init()
 	{
-		if(this.hServerCategories)
-			delete this.hServerCategories;
+		this.Close();
 		
-		this.hServerCategories = new ArrayList(ByteCountToCells(MAX_CATEGORY_NAME_LENGHT));
-		this.AddCategories();
+		this.hCategories = new ArrayList(ByteCountToCells(MAX_CATEGORY_NAME_LENGHT));
 	}
 	
-	void Reset()
+	void Close()
 	{
-		this.Init();
-		this.sServerName 	 = "";
-		this.sServerMap 	 = "";
-		
-		this.iReservedSlots  = 0;
-		this.iNumOfPlayers	 = 0;
-		this.iServerIP32	 = 0;
-		this.iServerPort	 = 0;
-		this.iMaxPlayers	 = 0;
-		this.iServerSteamAID = 0;
-		this.iServerBackupID = 0;
-		
-		this.bShowInServerList = false;
-		this.bServerStatus 	   = false;
-		this.bHiddenSlots 	   = false;
-		this.bIncludeBots 	   = false;
+		if(this.hCategories)
+			delete this.hCategories;
 	}
 	
-	bool IsTimedOut(Handle hQuery)
+	bool IsTimedOut(DBResultSet results)
 	{
 		if(g_cvPrintDebug.BoolValue)
-			LogMessage(" <-- Server.IsTimedOut() | iServerSteamAID = %d", this.iServerSteamAID);
+			LogMessage(" <-- Server.IsTimedOut() | iSteamAID = %d", this.iSteamAID);
 		
-		int iServerTimeOut = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_TIMEOUT) * 60;
+		int iServerTimeOut = results.FetchInt(SQL_FIELD_TIMEOUT) * 60;
 		if(iServerTimeOut > 0)
 		{
-			int iServerLastUpdate 		 = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_LAST_UPDATE_UNIX);
+			int iServerLastUpdate 		 = results.FetchInt(SQL_FIELD_LAST_UPDATE_UNIX);
 			int iServerTimeWithoutUpdate = GetTime() - iServerLastUpdate;
 			
 			if (g_cvPrintDebug.BoolValue)
 				LogMessage("Deleting Server (Server Steam ID - %d | Last update - %d | timeout time in sec - %d | time without update %d)",
-					this.iServerSteamAID,
+					this.iSteamAID,
 					iServerLastUpdate,
 					iServerTimeOut,
 					iServerTimeWithoutUpdate
@@ -198,34 +113,81 @@ enum struct Server
 		return false;
 	}
 	
+	void AddCategoriesToDB()
+	{
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage(" <-- Server.AddCategoriesToDB()");
+		
+		if(!this.hCategories.Length)
+			return;
+		
+		strcopy(Query, sizeof(Query), "INSERT INTO `server_redirect_categories` (`name`, `associated_server_steam_id`) VALUES");
+		
+		char sCategory[MAX_CATEGORY_NAME_LENGHT];
+		for (int iCurrentCategory = 0; iCurrentCategory < this.hCategories.Length; iCurrentCategory++)
+		{
+			this.hCategories.GetString(iCurrentCategory, sCategory, MAX_CATEGORY_NAME_LENGHT);
+			Format(Query, sizeof(Query), "%s ('%s', %d)%s", Query, sCategory, this.iSteamAID, iCurrentCategory != this.hCategories.Length - 1 ? ", " : ";");
+		}
+		
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage("[Query] Server.AddCategoriesToDB(): %s", Query);
+		
+		DB.Query(T_FakeFastQuery, Query);
+	}
+	
+	void DeleteCategoriesFromDB(int iOldSteadAID = -1)
+	{
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage(" <-- Server.DeleteCategoriesFromDB()");
+		
+		Format(Query, sizeof(Query), "DELETE FROM `server_redirect_categories` WHERE `associated_server_steam_id` = %d", (iOldSteadAID == -1) ? this.iSteamAID : iOldSteadAID);
+		
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage("[Query] Server.DeleteCategoriesFromDB(): %s", Query);
+		
+		DB.Query(T_FakeFastQuery, Query);
+	}
+	
+	void UpdateCategoriesInDB()
+	{
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage(" <-- Server.UpdateCategoriesInDB()");
+		
+		this.DeleteCategoriesFromDB();
+		this.AddCategoriesToDB();
+	}
+	
 	void DeleteFromDB()
 	{
 		if(g_cvPrintDebug.BoolValue)
-			LogMessage(" <-- Server.DeleteFromDB() | iServerSteamAID = %d", this.iServerSteamAID);
+			LogMessage(" <-- Server.DeleteFromDB()");
 		
-		Format(Query, sizeof(Query), "DELETE FROM `server_redirect_servers` WHERE `server_steam_id` = %d", this.iServerSteamAID);
+		Format(Query, sizeof(Query), "DELETE FROM `server_redirect_servers` WHERE `steam_id` = %d", this.iSteamAID);
 					
 		if (g_cvPrintDebug.BoolValue)
-			LogMessage("Delete Server Query: %s", Query);
+			LogMessage("[Query] Server.DeleteFromDB(): %s", Query);
 	
 		DB.Query(T_FakeFastQuery, Query, _, DBPrio_Low);
+		
+		this.DeleteCategoriesFromDB();
 	}
 	
 	// Registering a new server in the Database server.
 	void Register()
 	{
 		if (g_cvPrintDebug.BoolValue)
-			LogMessage(" <-- Server.Register() | iServerSteamAID = %d", this.iServerSteamAID);
+			LogMessage(" <-- Server.Register()");
 		
-		DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_servers` (`server_backup_id`, `server_steam_id`, `server_name`, `server_categories`, `server_ip`, `server_port`, `server_status`, `server_map`, `number_of_players`, `max_players`, `reserved_slots`, `hidden_slots`, `server_visible`, `timeout_time`) VALUES (%d, %d, '%s', '%s', %d, %d, %d, '%s', %d, %d, %d, %d, %b, %d)", 
-			this.iServerBackupID,
-			this.iServerSteamAID,
-			this.sServerName,
-			this.sCategoriesString,
-			this.iServerIP32,
-			this.iServerPort,
-			this.bServerStatus,
-			this.sServerMap,
+		DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_servers` (`backup_id`, `steam_id`, `name`, `password`, `ip`, `port`, `status`, `map`, `number_of_players`, `max_players`, `reserved_slots`, `hidden_slots`, `is_visible`, `timeout_time`) VALUES (%d, %d, '%s', '%s', %d, %d, %d, '%s', %d, %d, %d, %d, %b, %d)", 
+			this.iBackupID,
+			this.iSteamAID,
+			this.sName,
+			this.sPass,
+			this.iP32,
+			this.iPort,
+			this.bStatus,
+			this.sMap,
 			this.iNumOfPlayers,
 			this.iMaxPlayers,
 			this.iReservedSlots,
@@ -235,9 +197,11 @@ enum struct Server
 		);
 		
 		if (g_cvPrintDebug.BoolValue)
-			LogMessage("Register Query: %s", Query);
+			LogMessage("[Query] Server.Register(): %s", Query);
 		
 		DB.Query(T_FakeFastQuery, Query, _, DBPrio_High);
+		
+		this.AddCategoriesToDB();
 	}
 	
 	// Updating the server information based of the sent parameter.
@@ -248,55 +212,55 @@ enum struct Server
 		
 		// TODO: Easy formatting, testing needed:
 		// Each UPDATE_TYPE will have a string and will be formatted in this template:
-		//Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET {CHANGE} WHERE `server_steam_id` = %d")
+		//Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET {CHANGE} WHERE `steam_id` = %d")
 		
 		switch (iWhatToUpdate)
 		{
 			case UPDATE_SERVER_STEAM_ID:
 			{
-				Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_steam_id` = %d WHERE `server_backup_id` = %d",
-					this.iServerSteamAID,
-					this.iServerBackupID
+				Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `steam_id` = %d WHERE `backup_id` = %d",
+					this.iSteamAID,
+					this.iBackupID
 				);
 			}
 			case UPDATE_SERVER_PLAYERS:
 			{
 				// Get Client-Count
-				this.iNumOfPlayers = GetClientCountEx(this.bIncludeBots);
-				
-				Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `number_of_players` = %d WHERE `server_steam_id` = %d",
+				Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `number_of_players` = %d WHERE `steam_id` = %d",
 					this.iNumOfPlayers,
-					this.iServerSteamAID
+					this.iSteamAID
 				);
 			}
 			case UPDATE_SERVER_STATUS:
 			{
-				Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_status` = %d WHERE `server_steam_id` = %d",
-					this.bServerStatus,
-					this.iServerSteamAID
+				Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `status` = %d WHERE `steam_id` = %d",
+					this.bStatus,
+					this.iSteamAID
 				);
 			}
 			case UPDATE_SERVER_START:
 			{
-				DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `server_name` = '%s', `server_categories` = '%s', `server_ip` = %d, `server_port` = %d, `server_status` = %d, `server_visible` = %d, `max_players` = %d, `reserved_slots` = %d, `hidden_slots` = %b, `bots_included` = %b, `server_map` = '%s', `timeout_time` = %d WHERE `server_steam_id` = %d",
-					this.sServerName,
-					this.sCategoriesString,
-					this.iServerIP32,
-					this.iServerPort,
-					this.bServerStatus,
+				this.UpdateCategoriesInDB();
+				
+				DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_servers` SET `name` = '%s', `password` = '%s', `ip` = %d, `port` = %d, `status` = %d, `is_visible` = %d, `max_players` = %d, `reserved_slots` = %d, `hidden_slots` = %b, `bots_included` = %b, `map` = '%s', `timeout_time` = %d WHERE `steam_id` = %d",
+					this.sName,
+					this.sPass,
+					this.iP32,
+					this.iPort,
+					this.bStatus,
 					this.bShowInServerList,
 					this.iMaxPlayers,
 					this.iReservedSlots,
 					this.bHiddenSlots,
 					this.bIncludeBots,
-					this.sServerMap,
+					this.sMap,
 					g_iServerTimeOut,
-					this.iServerSteamAID
+					this.iSteamAID
 				);
 			}
 		}
 		if (g_cvPrintDebug.BoolValue)
-			LogMessage("Update Query: %s", Query);
+			LogMessage("[Query] Server.UpdateInDB(): %s", Query);
 		
 		DB.Query(T_FakeFastQuery, Query, _, dbPriority);
 	}
@@ -304,41 +268,40 @@ enum struct Server
 	void UpdateServerAdvertisements(int iOutdatedServerSteamAID)
 	{
 		if(g_cvPrintDebug.BoolValue)
-			LogMessage(" <-- Server.DeleteFromDB() | iServerSteamAID = %d (Outdated: %d)", this.iServerSteamAID, iOutdatedServerSteamAID);
+			LogMessage(" <-- Server.DeleteFromDB() | iSteamAID = %d (Outdated: %d)", this.iSteamAID, iOutdatedServerSteamAID);
 		
-		Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `server_id_to_adv` = %d WHERE `server_id_to_adv` = %d", this.iServerSteamAID, iOutdatedServerSteamAID);
+		Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `advertised_server` = %d WHERE `advertised_server` = %d", this.iSteamAID, iOutdatedServerSteamAID);
 		
 		if(g_cvPrintDebug.BoolValue)
-			LogMessage("`server_id_to_adv` Query: %s", Query);
+			LogMessage("[Query] Server.UpdateServerAdvertisements() | advertised_server: %s", Query);
 		
 		DB.Query(T_FakeFastQuery, Query);
 		
-		Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `server_id` = %d WHERE `server_id` = %d", this.iServerSteamAID, iOutdatedServerSteamAID);
+		Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `advertising_server` = %d WHERE `advertising_server` = %d", this.iSteamAID, iOutdatedServerSteamAID);
 		
 		if(g_cvPrintDebug.BoolValue)
-			LogMessage("`server_id_to_adv` Query: %s", Query);
+			LogMessage("[Query] Server.UpdateServerAdvertisements() | advertising_server: %s", Query);
 		
 		DB.Query(T_FakeFastQuery, Query);
 	}
 	
-	void AddCategories()
+	void AddCategory(const char[] sCategory)
 	{
-		char sCategories[MAX_CATEGORY_COUNT][MAX_CATEGORY_NAME_LENGHT];
-		ExplodeString(this.sCategoriesString, ",", sCategories, sizeof(sCategories), sizeof(sCategories[]));
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage(" <-- Server.AddCategory() | Category Name: %s", sCategory);
 		
-		for (int iCurrentCategory = 0; iCurrentCategory < sizeof(sCategories) && !StrEqual(sCategories[iCurrentCategory], ""); iCurrentCategory++)
-			this.hServerCategories.PushString(sCategories[iCurrentCategory]);
+		this.hCategories.PushString(sCategory);
 	}
 	
 	void DebugPrint_Categories()
 	{
 		char sCategory[MAX_CATEGORY_NAME_LENGHT];
 		
-		PrintToChatAll("%s '%s' Categories:", PREFIX, this.sServerName);
+		PrintToChatAll("%s '%s' Categories:", PREFIX, this.sName);
 		
-		for (int iCurrentCategory = 0; iCurrentCategory < this.hServerCategories.Length; iCurrentCategory++)
+		for (int iCurrentCategory = 0; iCurrentCategory < this.hCategories.Length; iCurrentCategory++)
 		{
-			this.hServerCategories.GetString(iCurrentCategory, sCategory, sizeof(sCategory));
+			this.hCategories.GetString(iCurrentCategory, sCategory, sizeof(sCategory));
 			PrintToChatAll("[%d] %s", iCurrentCategory, sCategory);
 		}
 	}
@@ -350,12 +313,12 @@ enum struct Server
 	
 	bool InCategory(const char[] sCategory)
 	{
-		return (this.hServerCategories.FindString(sCategory) != -1);
+		return (this.hCategories.FindString(sCategory) != -1);
 	}
 	
 	void GetCategoryName(int index, char[] sBufferToStoreIn, int iBufferSize)
 	{
-		this.hServerCategories.GetString(index, sBufferToStoreIn, iBufferSize);
+		this.hCategories.GetString(index, sBufferToStoreIn, iBufferSize);
 	}
 }
 ArrayList g_hOtherServers;
@@ -364,29 +327,29 @@ Server g_srThisServer;
 //=====[ ADVERTISEMENT ENUM ]===//
 enum struct Advertisement
 {
-	int iPlayersRange[2]; 		// 0 - MIN | 1 - MAX
+	int iPlayersRange[2]; 	// 0 - MIN | 1 - MAX
 	
-	int iServerSteamAIDToAdvertise;	// Advertised Server
-	int iAdvertisedTime;		// Used for calculating if the advertisement should post
-	int iCoolDownTime;			// How long should this advertisement should be on cooldown (for 'deffrence check' advertisements)
-	int iRepeatTime;			// How long to wait between each advertise
-	int iAdvID;					// Advertisement ID
+	int iAdvertisedServer;	// Advertised Server
+	int iAdvertisedTime;	// Used for calculating if the advertisement should post
+	int iCoolDownTime;		// How long should this advertisement should be on cooldown (for 'deffrence check' advertisements)
+	int iRepeatTime;		// How long to wait between each advertise
+	int iAdvID;				// Advertisement ID
 	
-	char sMessageContent[512];	// Message to print
+	char sMessage[512];		// Message to print
 	
-	bool bActive;				// If the advertisement is currently active
+	bool bActive;			// If the advertisement is currently active
 	
 	void Reset()
 	{
 		this.iPlayersRange = {0, 0};
 		
-		this.iServerSteamAIDToAdvertise = 0;
-		this.iAdvertisedTime = 0;
-		this.iCoolDownTime 	 = 0;
-		this.iRepeatTime 	 = 0;
-		this.iAdvID 		 = 0;
+		this.iAdvertisedServer 	= 0;
+		this.iAdvertisedTime 	= 0;
+		this.iCoolDownTime 		= 0;
+		this.iRepeatTime 		= 0;
+		this.iAdvID 			= 0;
 		
-		this.sMessageContent = "";
+		this.sMessage = "";
 		
 		this.bActive = false;
 	}
@@ -399,12 +362,12 @@ enum struct Advertisement
 		Format(Query, sizeof(Query), "DELETE FROM `server_redirect_advertisements` WHERE `id` = %d", this.iAdvID);	
 		
 		if(g_cvPrintDebug.BoolValue)
-			LogMessage("Query: %s", Query);
+			LogMessage("[Query] Advertisement.DeleteFromDB(): %s", Query);
 		
 		DB.Query(T_UpdateAdvertisementQuery, Query, false);
 	}
 	
-	void UpdateOnDB()
+	int UpdateOnDB()
 	{
 		if(g_cvPrintDebug.BoolValue)
 			LogMessage(" <-- Advertisement.UpdateOnDB() | iAdvID = %d", this.iAdvID);
@@ -412,22 +375,24 @@ enum struct Advertisement
 		char sPlayersRange[6];
 		Format(sPlayersRange, sizeof(sPlayersRange), "%d|%d", this.iPlayersRange[0], this.iPlayersRange[1]);
 		
-		DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `server_id_to_adv` = %d, `adv_repeat_time` = %d, `adv_cooldown_time` = %d, `adv_players_range` = '%s', `adv_message` = '%s' WHERE `id` = %d",
-			this.iServerSteamAIDToAdvertise,
+		DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `advertised_server` = %d, `repeat_time` = %d, `ooldown_time` = %d, `players_range` = '%s', `message` = '%s' WHERE `id` = %d",
+			this.iAdvertisedServer,
 			this.iRepeatTime,
 			this.iCoolDownTime,
 			sPlayersRange,
-			this.sMessageContent,
+			this.sMessage,
 			this.iAdvID
 		);
 		
 		if(g_cvPrintDebug.BoolValue)
-			LogMessage("Query: %s", Query);
+			LogMessage("[Query] Advertisement.UpdateOnDB(): %s", Query);
 		
 		DB.Query(T_UpdateAdvertisementQuery, Query, false);
+		
+		return ADV_ACTION_UPDATE;
 	}
 	
-	void AddToDB()
+	int AddToDB()
 	{
 		if(g_cvPrintDebug.BoolValue)
 			LogMessage(" <-- Advertisement.AddToDB() | iAdvID = %d", this.iAdvID);
@@ -435,19 +400,21 @@ enum struct Advertisement
 		char sPlayersRange[6];
 		Format(sPlayersRange, sizeof(sPlayersRange), "%d|%d", this.iPlayersRange[0], this.iPlayersRange[1]);
 		
-		DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_advertisements`(`server_id`, `server_id_to_adv`, `adv_repeat_time`, `adv_cooldown_time`, `adv_message`, `adv_players_range`) VALUES (%d, %d, %d, %d, '%s', '%s')",
-			g_srThisServer.iServerSteamAID,
-			this.iServerSteamAIDToAdvertise,
+		DB.Format(Query, sizeof(Query), "INSERT INTO `server_redirect_advertisements`(`advertising_server`, `advertised_server`, `repeat_time`, `cooldown_time`, `message`, `players_range`) VALUES (%d, %d, %d, %d, '%s', '%s')",
+			g_srThisServer.iSteamAID,
+			this.iAdvertisedServer,
 			this.iRepeatTime,
 			this.iCoolDownTime,
-			this.sMessageContent,
+			this.sMessage,
 			sPlayersRange
 		);
 		
 		if(g_cvPrintDebug.BoolValue)
-			LogMessage("Query: %s", Query);
+			LogMessage("[Query] Advertisement.AddToDB(): %s", Query);
 		
 		DB.Query(T_UpdateAdvertisementQuery, Query);
+		
+		return ADV_ACTION_EDIT;
 	}
 }
 ArrayList g_hAdvertisements; // All of the server advertisements
@@ -482,7 +449,7 @@ public void OnPluginStart()
 	
 	rgCountStrings = CompileRegex(REGEX_COUNT_STRINGS);
 	//==============================[ HOOKS ]===========================//
-	HookEvent("server_spawn"	, Event_ServerSpawn		, EventHookMode_Post);
+	HookEvent("server_spawn", Event_ServerSpawn, EventHookMode_Post);
 	
 	//==========================[ Console-Vars ]========================//
 	g_cvUpdateOtherServersInterval 	= CreateConVar("server_redirect_other_servers_update_interval"	, "20.0", "The number of seconds between other servers update."											, _, true, 5.0, true, 600.0	);
@@ -496,6 +463,7 @@ public void OnPluginStart()
 	g_cvNetPublicAdr  = FindConVar("net_public_adr"		);
 	g_cvReservedSlots = FindConVar("sm_reserved_slots"	);
 	g_cvHiddenSlots	  = FindConVar("sm_hide_slots"		);
+	g_cvSvPassword	  = FindConVar("sv_password"		);
 	
 	//========================[ Load Translations ]=====================//
 	LoadTranslations("server_redirect.phrases");
@@ -507,7 +475,7 @@ public void OnPluginStart()
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-    g_bLateLoad = late;
+	g_bLateLoad = late;
 }
 
 // We are getting the Server info here because some things are invalid before,
@@ -533,12 +501,14 @@ public void OnMapStart()
 public void OnClientPostAdminCheck(int client)
 {
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- OnClientPostAdminCheck | int client =  %d", client);
+		LogMessage(" <-- OnClientPostAdminCheck | client =  %N (%d)", client, client);
 	
 	// Check if the client is a bot and if the server doesn't want to take bots into account (continue if the client is not fake)
 	// Yes: Starting the update Player-Count timer.
 	if (!IsFakeClient(client) || g_srThisServer.bIncludeBots)
 	{
+		g_srThisServer.iNumOfPlayers = GetClientCountEx(g_srThisServer.bIncludeBots);
+		
 		StartUpdateTimer();
 		
 		if (g_cvPrintDebug.BoolValue)
@@ -550,7 +520,7 @@ public void OnClientPostAdminCheck(int client)
 public void OnClientDisconnect(int client)
 {
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- OnClientDisconnect | int client =  %d", client);
+		LogMessage(" <-- OnClientDisconnect | client = %N (%d)", client, client);
 	
 	// Check if the client is a bot and if the server doesn't want to take bots into account (continue if the client is not fake)
 	// Yes: Starting the update Player-Count timer.
@@ -562,24 +532,10 @@ public void OnClientDisconnect(int client)
 		if (g_cvPrintDebug.BoolValue)
 				LogMessage("Number of remaining clients - %d", g_srThisServer.iNumOfPlayers);
 		
-		// Check If there are players in the server:
-		// YES:	start the Player-Count timer.
-		// NO:	Update the Player-Count right away. (all of the players left)
-		if(!g_srThisServer.iNumOfPlayers)
-		{
-			StartUpdateTimer();
-			
-			if (g_cvPrintDebug.BoolValue)
-				LogMessage("Next update will be in %d seconds.", (g_srThisServer.iNumOfPlayers != 0) ? g_cvUpdateServerInterval.IntValue : 0);
-		}
-		else
-		{
-			g_srThisServer.UpdateInDB(UPDATE_SERVER_PLAYERS);
-			
-			// Stop the update timer if it's running
-			if (!g_hServerUpdateTimer)
-				delete g_hServerUpdateTimer;
-		}
+		if (g_cvPrintDebug.BoolValue)
+			LogMessage("Update will be sent %s", (g_srThisServer.iNumOfPlayers != 0) ? "After the timer" : "Now");
+		
+		StartUpdateTimer(!g_srThisServer.iNumOfPlayers);
 	}
 }
 
@@ -593,14 +549,14 @@ public void OnPluginEnd()
 	// Check if the server has a valid Backup-ID:
 	// YES: Don't delete the server. Just make it offline.
 	// NO:	Delete it from the database now. (we can't be sure we will find the server when it's back online)
-	if(g_srThisServer.iServerBackupID > 0)
+	if(g_srThisServer.iBackupID > 0)
 	{
-		g_srThisServer.bServerStatus = false;
+		g_srThisServer.bStatus = false;
 		g_srThisServer.UpdateInDB(UPDATE_SERVER_STATUS);
 	}
 	else
 	{
-		Format(Query, sizeof(Query), "DELETE FROM `server_redirect_servers` WHERE `server_steam_id` = %d", g_srThisServer.iServerSteamAID);
+		Format(Query, sizeof(Query), "DELETE FROM `server_redirect_servers` WHERE `steam_id` = %d", g_srThisServer.iSteamAID);
 		DB.Query(T_FakeFastQuery, Query, _, DBPrio_High);
 	}
 }
@@ -608,7 +564,7 @@ public void OnPluginEnd()
 //==================================[ TIMERS ]==============================//
 
 // Main Timer for the Advertisements and updating the player count.
-Action Timer_Loop(Handle hTimer)
+Action Timer_Loop(Handle timer)
 {
 	// If there are no players in the server, don't bother advertising or updating other servers. Because no one can use it / see it.
 	if (!g_srThisServer.iNumOfPlayers)
@@ -634,13 +590,9 @@ Action Timer_Loop(Handle hTimer)
 			if(!advCurrentAdvertisement.iAdvID)
 				break;
 			
-			// If the advertisement isn't a LOOP type, continue to the next one
-			if(advCurrentAdvertisement.iRepeatTime < ADVERTISEMENT_LOOP)
-				continue;
-			
-			// If this is the time to post the advertisement, go for it.
-			if(g_iTimerCounter % advCurrentAdvertisement.iRepeatTime == 0)
-				PostAdvertisement(advCurrentAdvertisement.iServerSteamAIDToAdvertise, ADVERTISEMENT_LOOP, iCurrentAdvertisement);
+			// If the advertisement is a LOOP type AND this is the time to post the advertisement, go for it.
+			if(advCurrentAdvertisement.iRepeatTime > ADVERTISEMENT_LOOP && g_iTimerCounter % advCurrentAdvertisement.iRepeatTime == 0)
+				PostAdvertisement(advCurrentAdvertisement.iAdvertisedServer, ADVERTISEMENT_LOOP, iCurrentAdvertisement);
 		}
 	}
 	
@@ -710,17 +662,40 @@ void T_OnDBConnected(Database dbMain, const char[] sError, any data)
 		DB = dbMain;
 		
 		// Create Tables
-		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS `server_redirect_servers` (`id` INT NOT NULL AUTO_INCREMENT, `server_backup_id` INT NOT NULL, `server_steam_id` INT NOT NULL, `server_name` VARCHAR(245) NOT NULL, `server_categories` VARCHAR(256) NOT NULL, `server_ip` INT NOT NULL DEFAULT '-1', `server_port` INT NOT NULL DEFAULT '0', `server_status` INT NOT NULL DEFAULT '0', `server_visible` INT NOT NULL DEFAULT '1', `server_map` VARCHAR(64) NOT NULL, `number_of_players` INT NOT NULL DEFAULT '0', `reserved_slots` INT NOT NULL DEFAULT '0', `hidden_slots` INT(1) NOT NULL DEFAULT '0', `max_players` INT NOT NULL DEFAULT '0', `bots_included` INT NOT NULL DEFAULT '0', `unix_lastupdate` TIMESTAMP on update CURRENT_TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, `timeout_time` INT NOT NULL DEFAULT '0', PRIMARY KEY (`id`), UNIQUE(`server_steam_id`))", _, DBPrio_High);
+		DB.Query(T_FakeFastQuery, "CREATE TABLE IF NOT EXISTS `server_redirect_categories` (`name` VARCHAR(32) NOT NULL, \
+																							`associated_server_steam_id` INT NOT NULL, \
+																							PRIMARY KEY (`name`, `associated_server_steam_id`))",
+																							_, DBPrio_High);
+		
+		DB.Query(T_OnDatabaseReady, "CREATE TABLE IF NOT EXISTS `server_redirect_servers` ( `id` INT NOT NULL AUTO_INCREMENT, \
+																							`backup_id` INT NOT NULL, \
+																							`steam_id` INT NOT NULL, \
+																							`name` VARCHAR(245) NOT NULL, \
+																							`password` VARCHAR(256) NOT NULL, \
+																							`ip` INT NOT NULL DEFAULT '-1', \
+																							`port` INT NOT NULL DEFAULT '0', \
+																							`status` INT NOT NULL DEFAULT '0', \
+																							`is_visible` INT NOT NULL DEFAULT '1', \
+																							`map` VARCHAR(64) NOT NULL, \
+																							`number_of_players` INT NOT NULL DEFAULT '0', \
+																							`reserved_slots` INT NOT NULL DEFAULT '0', \
+																							`hidden_slots` INT(1) NOT NULL DEFAULT '0', \
+																							`max_players` INT NOT NULL DEFAULT '0', \
+																							`bots_included` INT NOT NULL DEFAULT '0', \
+																							`unix_lastupdate` TIMESTAMP on update CURRENT_TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, \
+																							`timeout_time` INT NOT NULL DEFAULT '0', \
+																							PRIMARY KEY (`id`), UNIQUE(`steam_id`))",
+																							_, DBPrio_High);
 	}
 }
 
 // Now the database is ready and we have a valid table to work with.
-void T_OnDatabaseReady(Handle owner, Handle hQuery, const char[] sError, any data)
+void T_OnDatabaseReady(Database owner, DBResultSet results, const char[] sError, any data)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- T_OnDatabaseReady");
 	
-	if (hQuery != INVALID_HANDLE)
+	if (results != INVALID_HANDLE)
 	{
 		// Find the server in the database.
 		FindServer();
@@ -735,35 +710,40 @@ void FindServer(int iSearchBy = SERVER_SEARCH_BY_STEAM_ID)
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- FindServer | iSearchBy - %d", iSearchBy);
 	
-	Format(Query, sizeof(Query), "SELECT `server_steam_id` FROM `server_redirect_servers` WHERE `%s` = %d",
-		(!iSearchBy) ? "server_steam_id" : "server_backup_id",
-		(!iSearchBy) ? g_srThisServer.iServerSteamAID : g_srThisServer.iServerBackupID);
+	Format(Query, sizeof(Query), "SELECT `steam_id` FROM `server_redirect_servers` WHERE `%s` = %d",
+		(!iSearchBy) ? "steam_id" : "backup_id",
+		(!iSearchBy) ? g_srThisServer.iSteamAID : g_srThisServer.iBackupID);
 		
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage("FindServer Query: %s", Query);
+		LogMessage("[Query] FindServer(): %s", Query);
 	
 	DB.Query(T_OnServerSearchResultsReceived, Query, iSearchBy, DBPrio_High);
 }
 
-void T_OnServerSearchResultsReceived(Handle owner, Handle hQuery, const char[] sError, any iSearchBy)
+void T_OnServerSearchResultsReceived(Database owner, DBResultSet results, const char[] sError, any iSearchBy)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- T_OnServerSearchResultsReceived");
 	
-	if (hQuery != INVALID_HANDLE)
+	if (results != INVALID_HANDLE)
 	{
 		// If the row is fetched, that means we found the server. No rows = server doesn't exit in the DB.
-		if(SQL_FetchRow(hQuery))
+		if(results.FetchRow())
 		{
 			if (g_cvPrintDebug.BoolValue)
-				LogMessage("Found Server %s-ID - %d", (iSearchBy == SERVER_SEARCH_BY_STEAM_ID) ? "Steam" : "Backup", (iSearchBy == SERVER_SEARCH_BY_STEAM_ID) ? g_srThisServer.iServerSteamAID : g_srThisServer.iServerBackupID);
+				LogMessage("Found Server %s-ID - %d", (iSearchBy == SERVER_SEARCH_BY_STEAM_ID) ? "Steam" : "Backup", (iSearchBy == SERVER_SEARCH_BY_STEAM_ID) ? g_srThisServer.iSteamAID : g_srThisServer.iBackupID);
 			
 			// If we found the server Backup-ID after not finding by Steam-ID, update the Steam-ID
 			if(iSearchBy == SERVER_SEARCH_BY_BACKUP_ID)
 			{
+				// Get the old SteamID
+				int iOutdatedServerSteamID = results.FetchInt(0);
+				
 				// Update advertisements (Change old Server Steam-ID to the new one)
-				int iOutdatedServerSteamID = SQL_FetchInt(hQuery, 0);
 				g_srThisServer.UpdateServerAdvertisements(iOutdatedServerSteamID);
+				
+				// Delete Old Categories
+				g_srThisServer.DeleteCategoriesFromDB(iOutdatedServerSteamID);
 				
 				// Update the new Steam-ID
 				g_srThisServer.UpdateInDB(UPDATE_SERVER_STEAM_ID, DBPrio_High);
@@ -775,10 +755,10 @@ void T_OnServerSearchResultsReceived(Handle owner, Handle hQuery, const char[] s
 		else 
 		{
 			// If the server wansn't found with the SteamAID and there is a valid Backup-ID, try recovering it.
-			if(iSearchBy == SERVER_SEARCH_BY_STEAM_ID && g_srThisServer.iServerBackupID > 0)
+			if(iSearchBy == SERVER_SEARCH_BY_STEAM_ID && g_srThisServer.iBackupID > 0)
 			{
 				if (g_cvPrintDebug.BoolValue)
-					LogMessage("Couldn't find any servers with this Steam-ID (%d), Searching for the Server Backup-ID", g_srThisServer.iServerSteamAID);
+					LogMessage("Couldn't find any servers with this Steam-ID (%d), Searching for the Server Backup-ID", g_srThisServer.iSteamAID);
 				
 				// Try to find the server with the Backup-ID
 				FindServer(SERVER_SEARCH_BY_BACKUP_ID);
@@ -798,29 +778,29 @@ void T_OnServerSearchResultsReceived(Handle owner, Handle hQuery, const char[] s
 }
 
 // We only need to send the query, nothing to receive.
-void T_FakeFastQuery(Handle owner, Handle hQuery, const char[] sError, any data)
+void T_FakeFastQuery(Database owner, DBResultSet results, const char[] sError, any data)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- T_FakeFastQuery");
 	
-	if (hQuery == INVALID_HANDLE)
+	if (results == INVALID_HANDLE)
 		LogError("Error in T_FakeFastQuery: %s", sError);
 }
 
 //==================================[ HELPING ]==============================//
 void PluginStartUpProccess()
 {
+	if (g_cvPrintDebug.BoolValue)
+		LogMessage(" <-- PluginStartUpProccess");
+	
 	// Load Settings from the config
 	LoadSettings();
-	
-	// Load the Server-List commands from the convar / config
-	LoadServerListCommands();
 	
 	// Loading the Database
 	LoadDB();
 	
 	// Starting the loop timer
-	CreateTimer(1.0, Timer_Loop, _, TIMER_REPEAT);
+	CreateTimer(1.0, Timer_Loop, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
 }
 
 // Load Server Settings
@@ -839,72 +819,108 @@ void LoadSettings()
 		SetFailState("%s Couldn't load plugin config.", PREFIX_NO_COLOR);
 	
 	// Get the ServerID
-	g_srThisServer.iServerBackupID = kvSettings.GetNum("ServerBackupID", 0);
+	g_srThisServer.iBackupID = kvSettings.GetNum("ServerBackupID", 0);
 	
-	g_srThisServer.iServerSteamAID = GetServerSteamAccountId();
+	g_srThisServer.iSteamAID = GetServerSteamAccountId();
 		
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage("Server Steam Accound-ID: %d", g_srThisServer.iServerSteamAID);
+		LogMessage("Server Steam Accound-ID: %d", g_srThisServer.iSteamAID);
 	
 	// If we don't have the server steam account id and we didn't got a ServerID ask for a manual configuration.
-	if(g_srThisServer.iServerSteamAID == 0)
+	if(g_srThisServer.iSteamAID == 0)
 		SetFailState("Couldn't get the Server Steam Account ID, please make sure the server is using a valid token!");
 	
 	// Get the rest of the settings if everything is ok
 	g_srThisServer.bShowInServerList = view_as<bool>(kvSettings.GetNum("ShowSeverInServerList"	, 1));
-	g_srThisServer.bIncludeBots 		= view_as<bool>(kvSettings.GetNum("ShowBots"				, 0));
-	g_bAdvertisementsAreEnabled 		= view_as<bool>(kvSettings.GetNum("EnableAdvertisements"	, 1));
-	g_bAdvertiseOfflineServers 			= view_as<bool>(kvSettings.GetNum("AdvertiseOfflineServers"	, 0));
+	g_srThisServer.bIncludeBots 	 = view_as<bool>(kvSettings.GetNum("ShowBots"				, 0));
+	g_bAdvertisementsAreEnabled 	 = view_as<bool>(kvSettings.GetNum("EnableAdvertisements"	, 1));
 	
 	g_iServerTimeOut = kvSettings.GetNum("ServerTimeOut", 1440);
 	
 	kvSettings.GetString("MenuFormat"			, g_sMenuFormat						, sizeof(g_sMenuFormat)						);
 	kvSettings.GetString("PrefixRemover"		, g_sPrefixRemover					, sizeof(g_sPrefixRemover)					);
-	kvSettings.GetString("ServerListCommands"	, g_sServerListCommands				, sizeof(g_sServerListCommands)				);
-	kvSettings.GetString("ServerName"			, g_srThisServer.sServerName		, sizeof(g_srThisServer.sServerName)		);
-	kvSettings.GetString("ServerCategory"		, g_srThisServer.sCategoriesString	, sizeof(g_srThisServer.sCategoriesString)	);
+	kvSettings.GetString("ServerName"			, g_srThisServer.sName				, sizeof(g_srThisServer.sName)				);
 	
 	g_srThisServer.Init();
 	
+	// Add all commands
+	if(kvSettings.JumpToKey("ServerListCommands"))
+	{
+		char sCommand[128];
+		
+		if(kvSettings.GotoFirstSubKey(false))
+		{
+			do
+			{
+				kvSettings.GetString(NULL_STRING, sCommand, sizeof(sCommand));
+				
+				if(!StrEqual(sCommand, "") && !CommandExists(sCommand))
+					RegConsoleCmd(sCommand, Command_ServerList, "Opens the Server-List Menu.");
+				
+			} while (kvSettings.GotoNextKey(false));
+			
+			kvSettings.GoBack();
+		}
+		
+		kvSettings.GoBack();
+	}
+	
+	// Add all categories
+	if(kvSettings.JumpToKey("ServerCategories"))
+	{
+		char sCategoryName[MAX_CATEGORY_NAME_LENGHT];
+		
+		if(kvSettings.GotoFirstSubKey(false))
+		{
+			do
+			{
+				kvSettings.GetString("name", sCategoryName, sizeof(sCategoryName));
+				g_srThisServer.AddCategory(sCategoryName);
+				
+			} while (kvSettings.GotoNextKey());
+		}
+	}
+	
+	kvSettings.Close();
+	
 	if (g_cvPrintDebug.BoolValue)
-		LogMessage("Settings Loaded:\nServerBackupID: %d\nMenuFormat: %s\nServerListCommands: %s\nServerName: %s\nServerCategory: %s\nShowBots: %d\nShowSeverInServerList: %d",
-			g_srThisServer.iServerSteamAID,
+		LogMessage("Settings Loaded:\nServerBackupID: %d\nMenuFormat: %s\nServerListCommands: %s\nServerName: %s\nShowBots: %d\nShowSeverInServerList: %d",
+			g_srThisServer.iSteamAID,
 			g_sMenuFormat,
 			g_sServerListCommands,
-			g_srThisServer.sServerName,
-			g_srThisServer.sCategoriesString,
+			g_srThisServer.sName,
 			g_srThisServer.bIncludeBots,
 			g_bShowServerOnServerList
 		);
 }
 
 // Starting the server update timer if it's not already running.
-void StartUpdateTimer()
+void StartUpdateTimer(bool bSkipTimerAndUpdate = false)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- StartUpdateTimer | ServerUpdateTimer %s", g_hServerUpdateTimer ? "Already running" : "Started");
 	
-	if (!g_hServerUpdateTimer)
-		g_hServerUpdateTimer = CreateTimer(g_cvUpdateServerInterval.FloatValue, Timer_UpdateServerInDatabase);
-}
-
-// Load the commands for the Server-List
-void LoadServerListCommands()
-{
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage(" <-- LoadServerListCommands | Commands string - %s", g_sServerListCommands);
+	// g_hServerUpdateTimer - FALSE | bSkipTimerAndUpdate - FALSE --> TIME
+	// g_hServerUpdateTimer - TRUE 	| bSkipTimerAndUpdate - TRUE  --> STOP | NOW
 	
-	// Get the commands separated from each other.
-	char sSingleCommands[32][16];
-	ExplodeString(g_sServerListCommands, ",", sSingleCommands, sizeof(sSingleCommands), sizeof(sSingleCommands[]));
+	// g_hServerUpdateTimer - FALSE | bSkipTimerAndUpdate - TRUE  --> NOW
+	// g_hServerUpdateTimer - TRUE 	| bSkipTimerAndUpdate - FALSE --> ----
 	
-	// Go over all the commands and register them
-	for (int iCurrentCommand = 0; !StrEqual(sSingleCommands[iCurrentCommand], "", false); iCurrentCommand++)
+	// If timer is not running.
+	if (!g_hServerUpdateTimer) 
 	{
-		if (g_cvPrintDebug.BoolValue)
-			LogMessage("sSingleCommands[%d]: %s", iCurrentCommand, sSingleCommands[iCurrentCommand]);
-			
-		RegConsoleCmd(sSingleCommands[iCurrentCommand], Command_ServerList, "Opens the Server-List Menu.");
+		// Start the timer with the right time, 0 if we need it now, if not just the interval.
+		g_hServerUpdateTimer = CreateTimer(bSkipTimerAndUpdate ? 0.0 : g_cvUpdateServerInterval.FloatValue, Timer_UpdateServerInDatabase);
+	}
+	// If the timer is running.
+	else if(bSkipTimerAndUpdate)
+	{
+		// if the timer is running and we need to update now, kill the timer.
+		if(bSkipTimerAndUpdate) 
+			delete g_hServerUpdateTimer;
+		
+		// Starting the timer.
+		CreateTimer(0.0, Timer_UpdateServerInDatabase);
 	}
 }
 
@@ -936,15 +952,15 @@ int GetClientCountEx(bool bIncludeBots)
 		if (IsClientInGame(iCurrentClient) && (!IsFakeClient(iCurrentClient) || bIncludeBots))
 			iClientCount++;
 	
-	if (g_cvPrintDebug.BoolValue)
-		LogMessage("%d real clients are in the server. (with%s bots)", iClientCount, bIncludeBots ? "" : "out");
-	
 	return iClientCount;
 }
 
 // Copying a string to it's destination and adding a '...' if the string isn't fully shown.
 int CopyStringWithDots(char[] sDest, int iDestLen, char[] sSource)
 {
+	if (g_cvPrintDebug.BoolValue)
+		LogMessage("<-- CopyStringWithDots | sSource - %s | length - %d", sSource, iDestLen);
+	
 	strcopy(sDest, iDestLen, sSource);
 	
 	if(strlen(sSource) > iDestLen && iDestLen > 3)
@@ -986,23 +1002,23 @@ void GetServerInfo()
 		LogMessage(" <-- GetServerInfo");
 	
 	// If it's blank, grab the server hostname
-	if (StrEqual(g_srThisServer.sServerName, "", false))
+	if (StrEqual(g_srThisServer.sName, "", false))
 	{
 		if (g_cvPrintDebug.BoolValue)
 			LogMessage("Server name was empty. Getting the hostname.");
 		
-		GetConVarString(FindConVar("hostname"), g_srThisServer.sServerName, sizeof(g_srThisServer.sServerName));
+		GetConVarString(FindConVar("hostname"), g_srThisServer.sName, sizeof(g_srThisServer.sName));
 	}
 	
 	// Get server map
-	GetCurrentMap(g_srThisServer.sServerMap, sizeof(g_srThisServer.sServerMap));
+	GetCurrentMap(g_srThisServer.sMap, sizeof(g_srThisServer.sMap));
 	
 	// Get only the name of the map if it's a workshop map
-	if (StrContains(g_srThisServer.sServerMap, "workshop/", false) != -1)
-		GetCurrentWorkshopMap(g_srThisServer.sServerMap, sizeof(g_srThisServer.sServerMap));
+	if (StrContains(g_srThisServer.sMap, "workshop/", false) != -1)
+		GetCurrentWorkshopMap(g_srThisServer.sMap, sizeof(g_srThisServer.sMap));
 	
 	// After everything we couldn't get the IP32, so we have no point to continue
-	if((g_srThisServer.iServerIP32 = GetServerIP32()) == 0)
+	if((g_srThisServer.iP32 = GetServerIP32()) == 0)
 		SetFailState("%s Couldn't get the server IP", PREFIX_NO_COLOR);
 	
 	// Get the server Max-Players
@@ -1015,26 +1031,28 @@ void GetServerInfo()
 	if(g_cvHiddenSlots)
 		g_srThisServer.bHiddenSlots = g_cvHiddenSlots.BoolValue;
 	
+	if(g_cvSvPassword)
+		g_cvSvPassword.GetString(g_srThisServer.sPass, sizeof(g_srThisServer.sPass));
+	
 	// Get the server Port
-	g_srThisServer.iServerPort = GetConVarInt(FindConVar("hostport"));
+	g_srThisServer.iPort = GetConVarInt(FindConVar("hostport"));
 	
 	// Get the server Player-Count
 	g_srThisServer.iNumOfPlayers = GetClientCountEx(g_srThisServer.bIncludeBots);
 	
 	// Set the server status to online.
-	g_srThisServer.bServerStatus = true;
+	g_srThisServer.bStatus = true;
 	
 	if (g_cvPrintDebug.BoolValue)
 	{
 		char iIP[4][4];
-		GetIPv4FromIP32(g_srThisServer.iServerIP32, iIP);
-		LogMessage("Name - %s\nCategory - %s\nIP32 - %d\nIP - %s.%s.%s.%s\nPort - %d\nMap - %s\nNumber of players - %d\nMax Players - %d\nshow server - %b", 
-			g_srThisServer.sServerName,
-			g_srThisServer.sCategoriesString,
-			g_srThisServer.iServerIP32,
+		GetIPv4FromIP32(g_srThisServer.iP32, iIP);
+		LogMessage("Name - %s\nIP32 - %d\nIP - %s.%s.%s.%s\nPort - %d\nMap - %s\nNumber of players - %d\nMax Players - %d\nshow server - %b", 
+			g_srThisServer.sName,
+			g_srThisServer.iP32,
 			iIP[0], iIP[1], iIP[2], iIP[3],
-			g_srThisServer.iServerPort,
-			g_srThisServer.sServerMap,
+			g_srThisServer.iPort,
+			g_srThisServer.sMap,
 			g_srThisServer.iNumOfPlayers,
 			g_srThisServer.iMaxPlayers,
 			g_srThisServer.bShowInServerList
@@ -1042,9 +1060,22 @@ void GetServerInfo()
 	}
 }
 
+// Returning the server index given the server ID
+int GetServerIndexByServerID(int iSteamAID)
+{
+	if (iSteamAID != 0)
+	{
+		for (int iCurrentServer = 0; iCurrentServer < g_hOtherServers.Length; iCurrentServer++)
+			if(GetServerByIndex(iCurrentServer).iSteamAID == iSteamAID)
+				return iCurrentServer;
+	}
+			
+	return -1;
+}
+
 any[] GetServerByIndex(int index)
 {
-	static Server srServer;
+	Server srServer;
 	g_hOtherServers.GetArray(index, srServer, sizeof(srServer));
 	
 	return srServer;
@@ -1052,13 +1083,13 @@ any[] GetServerByIndex(int index)
 
 any[] GetAdvertisementByIndex(int index)
 {
-	static Advertisement advAdvertisement;
+	Advertisement advAdvertisement;
 	g_hAdvertisements.GetArray(index, advAdvertisement, sizeof(advAdvertisement));
 	
 	return advAdvertisement;
 }
 
-// From smlib: https://github.com/bcserv/smlib/blob/master/scripting/include/smlib/strings.inc#L185-L233   -  Thanks :)
+// From smlib: https://github.com/bcserv/smlib/blob/master/scripting/include/smlib/strings.inc#L185-L206   -  Thanks :)
 // Translated to new syntax by me.
 
 /**
@@ -1086,16 +1117,14 @@ bool String_StartsWith(const char[] str, const char[] subString)
 /* TODO:
 * This Release:
 * 1. [✓] Add an option to delete a sever from the database. (insted added a "time-out" so servers that didn't got updated in x min will get deleted) 
-* 3. [✓] Add reserve slot support for the player-count.
-* 2. [✗] Add an option to show / hide certian servers.
-* 4. [✗] Multi-Select for advertisements
-* 5. [✗] Add to servers table struct the Account-ID so we identify the server automaticlly
+* 2. [✓] Add reserve slot support for the player-count.
+* 3. [✓] Make the plugin more dynamic and use arraylist so i wont have to use fixed arrays.
+* 4. [✓] Add to servers table struct the Account-ID so we identify the server automaticlly.
+* 5. [✗] Add an option to show / hide certian servers.
+* 6. [✗] Multi-Select for advertisements
 *
 * Later Releases:
-* 1. [✗] Make the plugin more dynamic and use arraylist so i wont have to use fixed arrays
-* 2. [✗] Party mod :P
-*
-* 
+* 1. [✗] Party mod :P
 */
 
 /* What was added? [Version 2.3.0 Changelog]
@@ -1110,4 +1139,6 @@ bool String_StartsWith(const char[] str, const char[] subString)
 * 9. FIX ServerList menu glitching out and not showing part of the servers / next / back buttons.
 * 10. Too many connections to the DB server FIX :)
 * 11. 0.0.0.0 IP BUG resolved.
+* 12. Plugin is now fully dynamic with arraylists.
+* 13. Add a server to multiple categories.
 */

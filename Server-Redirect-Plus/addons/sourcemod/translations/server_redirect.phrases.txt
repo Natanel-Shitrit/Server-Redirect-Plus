@@ -3,16 +3,18 @@
 	// MENU
 	"NoServersFound"
 	{
-		// 1 - PREFIX //
+		// 1 - PREFIX
 		"#format"	"{1:s}"
-		"en"		"{1} {lightred}No servers was found.{default}"
-		"chi"		"{1} {lightred}未能找到服务器.{default}"
-		"cze"		"{1} {lightred}Nebyli nalezeny žádné servery{default}"
+		"en"		"{1} {lightred}No servers were found.{default}"
+		"chi"		"{1} {lightred}找不到服务器.{default}"
+		"cze"		"{1} {lightred}Nebyly nalezeny žádné servery{default}"
 	}
 	
 	"NumberOfPlayersMenu"
 	{
-		// 1 - Number Of Players, 2 - Max Players, 3 - Server Full Prefix //
+		// 1 - Number Of Players
+		// 2 - Max Players
+		// 3 - Server Full Prefix
 		"#format"	"{1:d},{2:d},{3:t}"
 		"en"		"Number of players: {1} / {2} {3}"
 		"chi"		"玩家数量: {1} / {2} {3}"
@@ -21,11 +23,11 @@
 	
 	"ServerMapMenu"
 	{
-		// 1 - Server Map Name //
+		// 1 - Server Map Name
 		"#format"	"{1:s}"
 		"en"		"Server Map: {1}"
 		"chi"		"服务器地图: {1}"
-		"cze"		"Mapa: {1}"
+		"cze"		"Mapa serveru: {1}"
 	}
 	
 	"PrintInfoMenu"
@@ -35,11 +37,18 @@
 		"cze"		"Poslat informace o serveru do chatu"
 	}
 	
+	"PrintServerPass"
+	{
+		// 1 - Password
+		"#format"	"{1:s}"
+		"en"		"Password Required: {1} \nOpen the console (~)\n "
+	}
+	
 	"JoinServerMenu"
 	{
 		"en"		"Join Server!"
 		"chi"		"加入服务器!"
-		"cze"		"Připojit se!"
+		"cze"		"Připojte se k serveru!"
 	}
 	
 	// CHAT (ServerInfo)
@@ -84,7 +93,7 @@
 		// 3 - Max players
 		"#format"	"{1:s},{2:d},{3:d}"
 		"en"		"{1} {red}PLAYERS{default}: {2} / {3}"
-		"chi"		"{1} {red}玩家{default}: {2} / {3}"
+		"chi"		"{1} {red}玩家们{default}: {2} / {3}"
 		"cze"		"{1} {red}POČET HRÁČŮ{default}: {2} / {3}"
 	}
 	
@@ -93,7 +102,7 @@
 	"ServerOfflineMenu"
 	{
 		"en"		"(SERVER OFFLINE)"
-		"chi"		"(服务器未在线)"
+		"chi"		"(服务器离线)"
 		"cze"		"(SERVER JE VYPNUT)"
 	}
 	
@@ -107,7 +116,7 @@
 	"ServerHiddenMenu"
 	{
 		"en"		"(HIDDEN)"
-		"chi"		"(隐藏)"
+		"chi"		"(隐)"
 		"cze"		"(SKRYTÝ)"
 	}
 	
@@ -116,6 +125,8 @@
 		// 1 - Number of reserved slots
 		"#format"	"{1:d}"
 		"en"		"({1} Reserved Slots)"
+		"chi"		"({1} 预留插槽)"
+		"cze"		"({1} Vyhrazené sloty)"
 	}
 	
 	// Command_ServerList //
@@ -147,11 +158,6 @@
 		"#format"	"{1:s}"
 		"en"		"{1} Edit Advertisements"
 	}
-	
-	"AddAdvertisementEditMenu"
-	{
-		"en"		"Add Advertisements"
-	}
 
 	"NoAdvertisementsFound"
 	{
@@ -159,12 +165,6 @@
 		"#format"	"{1:s}"
 		"en"		"{1} {lightred}No Advertisements was found.{default}"
 	}
-
-	"EditAdvertisementsMenuItem"
-	{
-		"en"		"Edit Advertisements"
-	}
-
 	// EditAdvertisementPropertiesMenu //
 	
 	"MenuAddAdvServerToAdv"
@@ -174,60 +174,69 @@
 		"en"		"Server to advertise: {1}"
 	}
 	
-	"MenuAddAdvMode"
+	"ChangeAdvPropery"
 	{
-		// 1 - Advertisement Mode
-		"#format"	"{1:s}"
-		"en"		"Advertisement mode: {1}"
+		// 1 - Advertisement property
+		// 2 - Advertisement Value String
+		"#format"	"{1:t},{2:s}"
+		"en"		"Advertisement {1}: {2}"
 	}
 	
-	"MenuAddAdvLoopTime"
+	"Mode"
 	{
-		// 1 - Advertisement Loop time
-		"#format"	"{1:d}"
-		"en"		"Advertisement loop time: {1}"
+		"en"	"Mode"
 	}
 	
-	"MenuAddAdvCooldownTime"
+	"Loop Time"
 	{
-		// 1 - Advertisement cooldown
-		"#format"	"{1:d}"
-		"en"		"Advertisement cooldown time: {1}"
+		"en"	"Loop Time"
 	}
 	
-	"MenuAddAdvPlayerRange"
+	"Cooldown Time"
 	{
-		// 1 - Range start
-		// 2 - Range end
-		"#format"	"{1:d},{2:d}"
-		"en"		"Advertisement player range: {1} | {2}"
+		"en"	"Cooldown Time"
 	}
 	
-	"MenuAddAdvMessage"
+	"Player Range"
 	{
-		// 1 - Advertisement Mode
-		"#format"	"{1:s}"
-		"en"		"Advertisement message: {1}"
+		"en"	"Player Range"
 	}
 	
-	"MenuAddAdvActionAdd"
+	"Message"
 	{
-		"en"		"Add Advertisement"
+		"en"	"Message"
 	}
 	
-	"MenuAddAdvActionEdit"
+	"MenuAdvAction"
 	{
-		"en"		"Edit Advertisement"
+		// 1 - Action Translation
+		"#format"	"{1:t}"
+		"en"		"{1} Advertisement"
+		"chi"		"{1} 广告"
 	}
 	
-	"MenuAddAdvActionReset"
+	"Add"
 	{
-		"en"		"Reset Advertisement"
+		"en"		"Add"
+		"chi"		"添加"
 	}
 	
-	"MenuAddAdvActionDelete"
+	"Edit"
 	{
-		"en"		"Delete Advertisement"
+		"en"		"Edit"
+		"chi"		"编辑"
+	}
+	
+	"Reset"
+	{
+		"en"		"Reset"
+		"chi"		"重设"
+	}
+	
+	"Delete"
+	{
+		"en"		"Delete"
+		"chi"		"删除"
 	}
 	
 	// AddAdvertisementMenuHandler //
@@ -237,6 +246,7 @@
 		// 1 - Prefix
 		"#format"	"{1:s}"
 		"en"		"{1} {darkred}Editing{default} Message:"
+		"chi"		"{1} {darkred}编辑{default} 消息内容:"
 	}
 	
 	"EnteredEditingMode"
@@ -244,6 +254,7 @@
 		// 1 - Prefix
 		"#format"	"{1:s}"
 		"en"		"{1} {green}Entered edit mode{default}, please enter the {darkred}value{default} in chat!"
+		"chi"		"{1} {green}进入编辑模式{default}, 请在聊天栏输入 {darkred}数值{default} !"
 	}
 	
 	"AbortEditingMode"
@@ -251,6 +262,15 @@
 		// 1 - Prefix
 		"#format"	"{1:s}"
 		"en"		"{1} To {darkred}abort{default} type {darkred}-1{default}."
+		"chi"		"{1} 输入 {darkred}-1{default} 来 {darkred}中止操作{default}."
+	}
+	
+	"ActionCompletedSuccessfully"
+	{
+		// 1 - Prefix
+		// 2 - Action
+		"#format"	"{1:s},{2:t}"
+		"en"		"{1} You have successfully {green}{2}ed{default} the {darkred}Advertisement{default}!"
 	}
 	
 	// SelectServerToAdvMenu //
@@ -260,6 +280,7 @@
 		// 1 - Prefix
 		"#format"	"{1:s}"
 		"en"		"{1} Select Server to Advertise:"
+		"chi"		"{1} 选择要广播的服务器:"
 	}
 	
 	// SelectServerToAdvCategoryMenu //
@@ -270,6 +291,7 @@
 		// 2 - Category
 		"#format"	"{1:s},{2:s}"
 		"en"		"{1} Select Server from {2}"
+		"chi"		"{1} 从 {2} 选择服务器"
 	}
 	
 	// ADVERTISMENTS ERRORS // 
@@ -279,36 +301,42 @@
 		// 1 - Prefix
 		"#format"	"{1:s}"
 		"en"		"{1} Please {green}Resolve{default} the following {darkred}issues{default} and try again:"
+		"chi"		"{1} 请 {green}解决{default} 以下 {darkred}问题{default} 然后重试:"
 	}
 	
 	//Invalid Server-ID
 	"AdvertisementError1"
 	{
 		"en"		"{green}Server-ID{default} is not a valid Server! {darkred}(Couldn't find the server){default}"
+		"chi"		"{green}服务器ID{default} 无效! {darkred}(找不到该服务器){default}"
 	}
 	
 	//Empty Message
 	"AdvertisementError2"
 	{
 		"en"		"{green}Message-Content{default} Is Empty! {green}Please re-enter the advertisement Message-Content.{default}"
+		"chi"		"{green}消息内容{default} 为空! {green}请重新输入广告消息内容!{default}"
 	}
 	
 	//Exceed Player-Range End
 	"AdvertisementError3"
 	{
 		"en"		"{green}Player-Range{default} is Invalid! {green}({darkred}Player-Range Start{green} should be {darkred}LOWER{green} than {darkred}Player-Range End{green}){default}"
+		"chi"		"{green}玩家范围{default} 无效! {green}({darkred}玩家范围起始值{green} 应该 {darkred}低于{green} 这个 {darkred}玩家范围结束值{green}){default}"
 	}
 	
 	//Invalid Player-Range Start
 	"AdvertisementError4"
 	{
 		"en"		"{green}Player-Range Start{default} doesn't have a valid value! {green}(0 < valid value < MAX PLAYERS){default}"
+		"chi"		"{green}玩家范围开始{default} 无效! {green}(0 < 有效值 < MAX PLAYERS){default}"
 	}
 	
 	//Invalid Player-Range End
 	"AdvertisementError5"
 	{
 		"en"		"{green}Player-Range End{default} doesn't have a valid value! {green}(0 < valid value < MAX PLAYERS){default}"
+		"chi"		"{green}玩家范围结束{default} 无效! {green}(0 < 有效值 < MAX PLAYERS){default}"
 	}
 	
 	"AdvertisementErrorInvalidValue"
@@ -317,6 +345,7 @@
 		// 2 - Value
 		"#format"	"{1:s},{2:d}"
 		"en"		"{1} {darkred}{2}{default} is not a valid value! {green}valid value --> ([number] > 0){default}"
+		"chi"		"{1} {darkred}{2}{default} 无效! {green}有效值 --> ([number] > 0){default}"
 	}
 	
 	"AdvertisementErrorInvalidPlayerRange"
@@ -324,6 +353,7 @@
 		// 1 - Prefix
 		"#format"	"{1:s}"
 		"en"		"{1} {darkred}Invalid{default} string for {green}Player-Range{default}."
+		"chi"		"{green}玩家范围{default}{1} {darkred}无效{default} "
 	}
 	
 	"PlayerRangeStringExampleRow1"
@@ -331,6 +361,7 @@
 		// 1 - Prefix
 		"#format"	"{1:s}"
 		"en"		"{1} {green}Valid{default} string template: {darkred}{min}|{max}{default}"
+		"chi"		"{1} {green}有效的{default} 示例模板: {darkred}{min}|{max}{default}"
 	}
 	
 	"PlayerRangeStringExampleRow2"
@@ -338,6 +369,7 @@
 		// 1 - Prefix
 		"#format"	"{1:s}"
 		"en"		"{1} {green}Example{default}: {darkred}10|15{default} (10 is {green}min{default}, 15 is {darkred}max{default})"
+		"chi"		"{1} {green}例如{default}: {darkred}10|15{default} (10 是 {green}最小数量{default}, 15 是 {darkred}最大数量{default})"
 	}
 	
 	"UpdatedSuccessfullyTemplate"
@@ -348,6 +380,7 @@
 		// 4 - New Value
 		"#format"	"{1:s},{2:t},{3:s},{4:s}"
 		"en"		"{1} {darkred}{2}{default} has been {green}successfully{default} updated. (From {darkred}'{3}'{default} TO {green}'{4}'{default})"
+		"chi"		"{1} {darkred}{2}{default} 被 {green} 成功的 {default} 更新. (从 {darkred}'{3}'{default} 更新至 {green}'{4}'{default})"
 	}
 	
 	"ExitEditMode"
@@ -355,31 +388,37 @@
 		// 1 - Prefix
 		"#format"	"{1:s}"
 		"en"		"{1} You {darkred}Left{default} the {green}Edit Mode{default}!"
+		"chi"		"{1} 你 {darkred}离开了{default}  {green}编辑模式{default}!"
 	}
 	
 	"LoopTimeTranslation"
 	{
 		"en"		"Loop-Time"
+		"chi"		"循环时间"
 	}
 	
 	"CooldownTimeTranslation"
 	{
 		"en"		"Cooldown"
+		"chi"		"冷却"
 	}
 	
 	"PlayerRangeTranslation"
 	{
 		"en"		"Player-Range"
+		"chi"		"玩家数量范围"
 	}
 	
 	"AdvMessageTranslation"
 	{
 		"en"		"Advertisement-Message"
+		"chi"		"广告信息"
 	}
 	
 	"EmptyText"
 	{
 		"en"		""
+		"chi"		""
 	}
 	
 	//{default}", "{darkred}", "{green}", "{lightgreen}", "{red}", "{blue}", "{olive}", "{lime}",

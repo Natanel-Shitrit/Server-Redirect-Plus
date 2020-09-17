@@ -26,8 +26,8 @@ To compile and use this plugin you need these dependencies on every server:\
  - [PTaH](https://github.com/komashchenko/PTaH)
 
 ## Compile instructions:
-1. Use 1.10+ sourcemod compiler
-2. Make sure you have all includes: `sourcemod`, `cstrike`, `redirect_core` and `multicolors`.
+1. Use 1.11 sourcemod compiler
+2. Make sure you have all includes: `sourcemod`, `redirect_core`, `multicolors` and 'ServerList'.
 3. Make sure `ServerRedirectCore.sp`, `ServerRedirectMenus.sp` and `ServerRedirectAdvertisements.sp` is in the same directory.
 4. You should only compile `ServerRedirectCore.sp`, all other files are included in there.
 5. Have fun 😉

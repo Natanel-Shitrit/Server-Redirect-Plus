@@ -8,65 +8,60 @@ public Plugin myinfo =
 };
 
 // SQL Callback for LoadServers()
-void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError, any bFirstLoad)
+void T_OnServersReceive(Database owner, DBResultSet results, const char[] sError, any bFirstLoad)
 {
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- T_OnServersReceive");
 	
 	// If we got a respond lets fetch the data and store it
-	if (hQuery != INVALID_HANDLE)
+	if (results != INVALID_HANDLE)
 	{
 		ArrayList hUpdatedServers = new ArrayList(sizeof(Server));
 		
 		// We are going to loop through all the server we got
-		while (SQL_FetchRow(hQuery))
+		while (results.FetchRow())
 		{
 			Server srNewServer;
 			
-			srNewServer.iServerSteamAID = SQL_FetchInt(hQuery, SQL_FIELD_SERVER_STEAM_ID);
+			srNewServer.iSteamAID = results.FetchInt(SQL_FIELD_STEAM_ID);
 			
-			if(srNewServer.IsTimedOut(hQuery))
+			if (srNewServer.IsTimedOut(results))
 			{
 				srNewServer.DeleteFromDB();
 				continue;
 			}
 			
 			// Store everything that we get from the database 
-			srNewServer.iServerIP32 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_IP);
-			srNewServer.iServerPort 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_PORT);
-			srNewServer.iReservedSlots 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_RESERVED_SLOTS);
+			srNewServer.iReservedSlots 	= results.FetchInt(SQL_FIELD_RESERVED_SLOTS	);
+			srNewServer.iPort 			= results.FetchInt(SQL_FIELD_PORT			);
+			srNewServer.iP32 			= results.FetchInt(SQL_FIELD_IP				);
 			
-			srNewServer.bServerStatus 	  = view_as<bool>(SQL_FetchInt(hQuery, SQL_FIELD_SERVER_STATUS));
-			srNewServer.bShowInServerList = view_as<bool>(SQL_FetchInt(hQuery, SQL_FIELD_SERVER_VISIBLE));
-			srNewServer.bHiddenSlots	  = view_as<bool>(SQL_FetchInt(hQuery, SQL_FIELD_SERVER_HIDDEN_SLOTS));
-			srNewServer.bIncludeBots 	  = view_as<bool>(SQL_FetchInt(hQuery, SQL_FIELD_SERVER_INCLUD_BOTS));
+			srNewServer.bHiddenSlots	  = view_as<bool>(results.FetchInt(SQL_FIELD_HIDDEN_SLOTS));
+			srNewServer.bIncludeBots 	  = view_as<bool>(results.FetchInt(SQL_FIELD_INCLUD_BOTS ));
+			srNewServer.bShowInServerList = view_as<bool>(results.FetchInt(SQL_FIELD_VISIBLE	 ));
+			srNewServer.bStatus 	  	  = view_as<bool>(results.FetchInt(SQL_FIELD_STATUS		 ));
 			
-			SQL_FetchString(hQuery, SQL_FIELD_SERVER_NAME, srNewServer.sServerName, sizeof(srNewServer.sServerName));
-			SQL_FetchString(hQuery, SQL_FIELD_SERVER_CATEGORY, srNewServer.sCategoriesString, sizeof(srNewServer.sCategoriesString));
+			results.FetchString(SQL_FIELD_NAME, srNewServer.sName, MAX_SERVER_NAME_LENGHT);
 			
 			// if the server is offline we don't want to load real-time data because it's not real-time (outdated),
 			// And we don't want to advertise Map-Changes / Player-Range Advertisements.
-			if (srNewServer.bServerStatus)
+			if (srNewServer.bStatus)
 			{
-				srNewServer.iNumOfPlayers 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_PLAYERS);
-				srNewServer.iMaxPlayers 	= SQL_FetchInt(hQuery, SQL_FIELD_SERVER_MAX_PLAYERS);
+				srNewServer.iNumOfPlayers 	= results.FetchInt(SQL_FIELD_PLAYERS		);
+				srNewServer.iMaxPlayers 	= results.FetchInt(SQL_FIELD_MAX_PLAYERS	);
 				
-				SQL_FetchString(hQuery, SQL_FIELD_SERVER_MAP, srNewServer.sServerMap, sizeof(srNewServer.sServerMap));
+				results.FetchString(SQL_FIELD_MAP , srNewServer.sMap , sizeof(srNewServer.sMap) );
+				results.FetchString(SQL_FIELD_PASS, srNewServer.sPass, sizeof(srNewServer.sPass));
 				
 				if(g_bAdvertisementsAreEnabled && !bFirstLoad)
 				{
-					int iOldServerIndex = GetServerIndexByServerID(srNewServer.iServerSteamAID);
+					int iOldServerIndex = GetServerIndexByServerID(srNewServer.iSteamAID);
 					
-					if(iOldServerIndex != -1)
-					{
-						Server srOldServer;
-						srOldServer = GetServerByIndex(iOldServerIndex);
-						
-						if (!StrEqual(srOldServer.sServerMap, srNewServer.sServerMap))
-							PostAdvertisement(srNewServer.iServerSteamAID, ADVERTISEMENT_MAP);
-					}
+					// BUG: {map} will show the old map, add a special {oldmap} for this event ({map} will stay the updated / current map).
+					if(iOldServerIndex != -1 && !StrEqual(GetServerByIndex(iOldServerIndex).sMap, srNewServer.sMap))
+						PostAdvertisement(srNewServer.iSteamAID, ADVERTISEMENT_MAP);
 					
-					int iServerAdvertisement = FindAdvertisement(srNewServer.iServerSteamAID, ADVERTISEMENT_PLAYERS_RANGE);
+					int iServerAdvertisement = FindAdvertisement(srNewServer.iSteamAID, ADVERTISEMENT_PLAYERS_RANGE);
 					Advertisement advServerAdvertisement;
 					
 					if (iServerAdvertisement != -1)
@@ -74,7 +69,7 @@ void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError, any bF
 						advServerAdvertisement = GetAdvertisementByIndex(iServerAdvertisement);
 						
 						if(advServerAdvertisement.iPlayersRange[0] <= srNewServer.iNumOfPlayers <= advServerAdvertisement.iPlayersRange[1])
-							PostAdvertisement(srNewServer.iServerSteamAID, ADVERTISEMENT_PLAYERS_RANGE);
+							PostAdvertisement(srNewServer.iSteamAID, ADVERTISEMENT_PLAYERS_RANGE);
 					}
 				}
 			}
@@ -82,37 +77,74 @@ void T_OnServersReceive(Handle owner, Handle hQuery, const char[] sError, any bF
 			srNewServer.Init();
 			hUpdatedServers.PushArray(srNewServer, sizeof(srNewServer));
 			
-			if (g_cvPrintDebug.BoolValue)
-				LogMessage("[T_OnServersReceive -> LOOP -> IF] Server Steam ID %d (Status: %b | Show: %b): \nName: %s, Category: %s, Map: %s, IP32: %d, Port: %d, Number of players: %d, Max players: %d",
-					srNewServer.iServerSteamAID,
-					srNewServer.bServerStatus,
+			if(g_cvPrintDebug.BoolValue)
+				LogMessage("[T_OnServersReceive -> LOOP -> IF] Server Steam ID %d (Status: %b | Show: %b): \nName: %s, Map: %s, IP32: %d, Port: %d, Number of players: %d, Max players: %d",
+					srNewServer.iSteamAID,
+					srNewServer.bStatus,
 					srNewServer.bShowInServerList,
-					srNewServer.sServerName,
-					srNewServer.sCategoriesString,
-					srNewServer.sServerMap,
-					srNewServer.iServerIP32,
-					srNewServer.iServerPort,
+					srNewServer.sName,
+					srNewServer.sMap,
+					srNewServer.iP32,
+					srNewServer.iPort,
 					srNewServer.iNumOfPlayers,
 					srNewServer.iMaxPlayers
 				);
 		}
 		
-		// Reload Advertisements if a server got deleted.
-		if(!bFirstLoad && g_bAdvertisementsAreEnabled && g_hOtherServers.Length != hUpdatedServers.Length)
-			LoadAdvertisements();
-		else // Create Advertisements Table on First-Load.
-			CreateAdvertisementsTable();
+		if(g_bAdvertisementsAreEnabled)
+		{
+			// Create Advertisements Table on First-Load.
+			if (bFirstLoad)
+				CreateAdvertisementsTable();
+			// Reload Advertisements if a server got deleted.
+			else if (g_hOtherServers.Length != hUpdatedServers.Length) 
+				LoadAdvertisements();
+		}
 		
 		if(g_hOtherServers)
+		{
+			//Server srCurrentServer;
+			for (int iCurrentServer = 0; iCurrentServer < g_hOtherServers.Length; iCurrentServer++)
+				GetServerByIndex(iCurrentServer).Close();
+			
 			delete g_hOtherServers;
+		}
 		
 		g_hOtherServers = hUpdatedServers;
 		
-		if (g_cvPrintDebug.BoolValue && !g_hOtherServers.Length)
+		if (g_hOtherServers.Length)
+			DB.Query(T_OnCategoriesReceive, "SELECT * FROM `server_redirect_categories`");
+		else if (g_cvPrintDebug.BoolValue)
 			LogError("No servers found in DB.");
 	}
 	else
 		LogError("T_OnServersReceive Error: %s", sError);
+}
+
+void T_OnCategoriesReceive(Database owner, DBResultSet results, const char[] sError, any data)
+{
+	if (g_cvPrintDebug.BoolValue)
+		LogMessage(" <-- T_OnCategoriesReceive");
+	
+	char sCategoryName[MAX_CATEGORY_NAME_LENGHT];
+	int iServerIndex;
+	
+	// If we got a respond lets fetch the data and store it
+	if (results != INVALID_HANDLE)
+	{
+		// We are going to loop through all the categories we got
+		while (results.FetchRow())
+		{
+			results.FetchString(CATEGORY_SQL_FIELD_NAME, sCategoryName, MAX_CATEGORY_NAME_LENGHT);
+			
+			iServerIndex = GetServerIndexByServerID(results.FetchInt(CATEGORY_SQL_FIELD_ASSOCIATED_SERVER_STEAM_ID));
+			
+			if(iServerIndex != -1)
+				GetServerByIndex(iServerIndex).AddCategory(sCategoryName);
+		}
+	}
+	else
+		LogError("T_OnCategoriesReceive Error: %s", sError);
 }
 
 //==================================[ MENUS & HANDLES ]==============================//
@@ -144,11 +176,14 @@ int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, int Clic
 			char sMenuItemInfo[MAX_CATEGORY_NAME_LENGHT];
 			ListMenu.GetItem(Clicked, sMenuItemInfo, sizeof(sMenuItemInfo));
 			
-			if (StrEqual(sMenuItemInfo, "EditAdvertisements"))		// If it was the edit advertisement button, open the edit menu.
+			// If it was the edit advertisement button, open the edit menu.
+			if (StrEqual(sMenuItemInfo, "EditAdvertisements"))
 				OpenEditServerRedirectAdvertisementsMenu(client);
-			else if (String_StartsWith(sMenuItemInfo, "[C]")) 		// If it was a category, show the category servers
+			// If it was a category, show the category servers
+			else if (String_StartsWith(sMenuItemInfo, "[C]"))
 				LoadCategoryMenu(client, sMenuItemInfo[4]);
-			else													// If we ended up here the client clicked on a server, let's prepare the server menu.
+			// If we ended up here the client clicked on a server, let's prepare the server menu.
+			else
 			{
 				// Get the Server-ID from the item info we got earlier.
 				char cServerID[4];
@@ -160,11 +195,11 @@ int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, int Clic
 				
 				// Get the server IP as 'xxx.xxx.xxx.xxx' from IP32
 				char ServerIP[4][4];
-				GetIPv4FromIP32(srServer.iServerIP32, ServerIP);
+				GetIPv4FromIP32(srServer.iP32, ServerIP);
 				
 				// Now we finally create the menu, also format the title.
 				Menu mServerInfo = new Menu(ServerInfoMenuHandler);
-				mServerInfo.SetTitle("%s [%s.%s.%s.%s:%d]\n ", srServer.sServerName, ServerIP[0], ServerIP[1], ServerIP[2], ServerIP[3], srServer.iServerPort);
+				mServerInfo.SetTitle("%s [%s.%s.%s.%s:%d]\n ", srServer.sName, ServerIP[0], ServerIP[1], ServerIP[2], ServerIP[3], srServer.iPort);
 				
 				bool bCanUseReservedSlots = CanClientUseReservedSlots(client, iServer);
 				int iMaxPlayerWithReserved = srServer.iMaxPlayers - ((!srServer.bHiddenSlots || bCanUseReservedSlots) ? 0 : srServer.iReservedSlots);
@@ -180,23 +215,31 @@ int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, int Clic
 				if(srServer.iReservedSlots && (!srServer.bHiddenSlots || bCanUseReservedSlots))
 					Format(sEditBuffer, sizeof(sEditBuffer), "%s %t", sEditBuffer, "ServerReservedSlots", srServer.iReservedSlots);
 					
-				mServerInfo.AddItem("", sEditBuffer, srServer.bServerStatus ? ITEMDRAW_DISABLED : ITEMDRAW_IGNORE);
+				mServerInfo.AddItem("", sEditBuffer, srServer.bStatus ? ITEMDRAW_DISABLED : ITEMDRAW_IGNORE);
 				
 				// Add 'Map'.
-				Format(sEditBuffer, sizeof(sEditBuffer), "%t\n ", "ServerMapMenu", srServer.sServerMap);
-				mServerInfo.AddItem("", sEditBuffer, srServer.bServerStatus ? ITEMDRAW_DISABLED : ITEMDRAW_IGNORE);
+				Format(sEditBuffer, sizeof(sEditBuffer), "%t\n ", "ServerMapMenu", srServer.sMap);
+				mServerInfo.AddItem("", sEditBuffer, srServer.bStatus ? ITEMDRAW_DISABLED : ITEMDRAW_IGNORE);
 				
 				// Add clickable option to print the info.
 				Format(sEditBuffer, sizeof(sEditBuffer), "%t", "PrintInfoMenu");
 				mServerInfo.AddItem("", sEditBuffer);
 				
+				bool bHasPasswordAccess = CheckCommandAccess(client, "server_redirect_show_pass", ADMFLAG_ROOT);
+				Format(sEditBuffer, sizeof(sEditBuffer), "%t", "PrintServerPass", CheckCommandAccess(client, "server_redirect_show_pass", ADMFLAG_ROOT) ? srServer.sPass : "******");
+				mServerInfo.AddItem("", sEditBuffer, StrEqual(srServer.sPass, "") ? ITEMDRAW_IGNORE : ITEMDRAW_DISABLED);
+				
+				// For easier Copy - Paste
+				if(bHasPasswordAccess && !StrEqual(srServer.sPass, ""))
+					PrintToConsole(client, "=====[ COPY & PASTE ]=====\npassword %s\n==========================", srServer.sPass);
+				
 				// Add clickable option to join the server.
 				Format(sEditBuffer, sizeof(sEditBuffer), "%t", "JoinServerMenu");
 				
-				if(!srServer.bServerStatus)
+				if(!srServer.bStatus)
 					Format(sEditBuffer, sizeof(sEditBuffer), "%s %t", sEditBuffer, "ServerOfflineMenu");
 				
-				mServerInfo.AddItem(cServerID, sEditBuffer, srServer.bServerStatus && (!bIsServerFull || CheckCommandAccess(client, "server_redirect_join_full_bypass", ADMFLAG_ROOT)) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
+				mServerInfo.AddItem(cServerID, sEditBuffer, srServer.bStatus && (!bIsServerFull || CheckCommandAccess(client, "server_redirect_join_full_bypass", ADMFLAG_ROOT)) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED);
 				
 				// Option to exit to the server category menu (Or to the main menu if there is no category)
 				mServerInfo.ExitButton = true;
@@ -214,7 +257,7 @@ int ServerListMenuHandler(Menu ListMenu, MenuAction action, int client, int Clic
 			{
 				srServer = GetServerByIndex(StringToInt(sFirstMenuItemInfoBuffer));
 				
-				if(!srServer.IsGlobal() || srServer.hServerCategories.Length > 2)
+				if(!srServer.IsGlobal() || srServer.hCategories.Length > 2)
 					Command_ServerList(client, 0);
 			}
 		}
@@ -251,23 +294,27 @@ int ServerInfoMenuHandler(Menu ServerInfoMenu, MenuAction action, int client, in
 				case 2:
 				{
 					char ServerIP[4][4];
-					GetIPv4FromIP32(srServer.iServerIP32, ServerIP);
+					GetIPv4FromIP32(srServer.iP32, ServerIP);
 					
-					CPrintToChat(client, "%t", "ServerInfoHeadline"	, PREFIX, srServer.sServerName);
-					CPrintToChat(client, "%t", "ServerInfoIP"		, PREFIX, ServerIP[0], ServerIP[1], ServerIP[2], ServerIP[3], srServer.iServerPort);
+					CPrintToChat(client, "%t", "ServerInfoHeadline"	, PREFIX, srServer.sName);
+					CPrintToChat(client, "%t", "ServerInfoIP"		, PREFIX, ServerIP[0], ServerIP[1], ServerIP[2], ServerIP[3], srServer.iPort);
 					
-					if(srServer.bServerStatus)
+					if(srServer.bStatus)
 					{
-						CPrintToChat(client, "%t", "ServerInfoMap"		, PREFIX, srServer.sServerMap);
+						CPrintToChat(client, "%t", "ServerInfoMap"		, PREFIX, srServer.sMap);
 						CPrintToChat(client, "%t", "ServerInfoPlayers"	, PREFIX, srServer.iNumOfPlayers, srServer.iMaxPlayers - ((!srServer.bHiddenSlots || CanClientUseReservedSlots(client, iServer)) ? 0 : srServer.iReservedSlots));
 					}
-					
 				}
 				// Clicked on the redirect / join button.
-				case 3:
+				case 4:
 				{
-					RedirectClientOnServer(client, srServer.iServerIP32, srServer.iServerPort);
+					// Redirect the client
+					RedirectClientOnServer(client, srServer.iP32, srServer.iPort);
+					
+					// Update the player count
+					OnClientDisconnect(client);
 				}
+					
 			}
 		}
 		case MenuAction_Cancel:
@@ -288,7 +335,7 @@ void LoadServers(bool bFirstLoad = false)
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- LoadServers | bFirstLoad = %b", bFirstLoad);
 	
-	DB.Format(Query, sizeof(Query), "SELECT *, UNIX_TIMESTAMP(unix_lastupdate) FROM `server_redirect_servers` WHERE `server_steam_id` != %d ORDER BY `server_backup_id`", g_srThisServer.iServerSteamAID);
+	DB.Format(Query, sizeof(Query), "SELECT *, UNIX_TIMESTAMP(unix_lastupdate) FROM `server_redirect_servers` WHERE `steam_id` != %d ORDER BY `backup_id`", g_srThisServer.iSteamAID);
 	
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage("[LoadServers] Query: %s", Query);
@@ -336,7 +383,7 @@ void SelectServerMainMenu(int client, MenuHandler mMenuHandlerToUse, const char[
 	if(bAddEditAdvButton)
 	{
 		char sTranslationTextBuffer[32];
-		Format(sTranslationTextBuffer, sizeof(sTranslationTextBuffer), "%t\n ", "EditAdvertisementsMenuItem");
+		Format(sTranslationTextBuffer, sizeof(sTranslationTextBuffer), "%ts\n ", "MenuAdvAction", "Edit");
 		mServerList.AddItem("EditAdvertisements", sTranslationTextBuffer, CheckCommandAccess(client, "server_redirect_edit_advertisements", ADMFLAG_ROOT) ? ITEMDRAW_DEFAULT : ITEMDRAW_IGNORE);
 	}
 		
@@ -367,7 +414,7 @@ int LoadMenuServers(Menu mMenu, int client, const char[] sMenuFormat, const char
 	{
 		srServer = GetServerByIndex(iCurrentServer);
 		
-		if (StrEqual(srServer.sServerName, "", false) || !srServer.InCategory(sCategory) || !ClientCanAccessToServer(client, iCurrentServer))
+		if (StrEqual(srServer.sName, "", false) || !srServer.InCategory(sCategory) || !ClientCanAccessToServer(client, iCurrentServer))
 			continue;
 		
 		strcopy(sServerShowString, iStringSize, sMenuFormat);
@@ -375,7 +422,7 @@ int LoadMenuServers(Menu mMenu, int client, const char[] sMenuFormat, const char
 		if (!srServer.bShowInServerList)
 			Format(sServerShowString, iStringSize, "%s %t", sServerShowString, "ServerHiddenMenu");
 		
-		if (srServer.bServerStatus)
+		if (srServer.bStatus)
 		{
 			if (srServer.iNumOfPlayers >= srServer.iMaxPlayers - ((!srServer.bHiddenSlots || CanClientUseReservedSlots(client, iCurrentServer)) ? 0 : srServer.iReservedSlots))
 				Format(sServerShowString, iStringSize, "%s %t", sServerShowString, "ServerFullMenu");
@@ -383,7 +430,7 @@ int LoadMenuServers(Menu mMenu, int client, const char[] sMenuFormat, const char
 			FormatStringWithServerProperties(sServerShowString, iStringSize + 1, iCurrentServer, client);
 		}
 		else
-			Format(sServerShowString, iStringSize, "%s %t", srServer.sServerName, "ServerOfflineMenu");
+			Format(sServerShowString, iStringSize, "%s %t", srServer.sName, "ServerOfflineMenu");
 		
 		char cServerID[3];
 		IntToString(iCurrentServer, cServerID, sizeof(cServerID));
@@ -428,10 +475,10 @@ void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, int iSe
 	// for each property, the number of characters in use will be subtracted from the variable that stores the number of characters left.
 	
 	// SERVER ID (DB ID)
-	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{id}", srServer.iServerSteamAID, false);
+	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{id}", srServer.iSteamAID, false);
 	
 	// SERVER PORT
-	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{port}", srServer.iServerPort, false);
+	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{port}", srServer.iPort, false);
 	
 	// CURRENT SERVER PLAYERS
 	iFormatSizeLeft -= ReplaceStringWithInt(sToFormat, iStringSize, "{current}", srServer.iNumOfPlayers, false);
@@ -441,12 +488,12 @@ void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, int iSe
 	
 	// SERVER IP - SIZE 16
 	char sServerIPv4[4][4], sFullIPv4[17];
-	GetIPv4FromIP32(srServer.iServerIP32, sServerIPv4);
+	GetIPv4FromIP32(srServer.iP32, sServerIPv4);
 	ImplodeStrings(sServerIPv4, 4, ".", sFullIPv4, sizeof(sFullIPv4));
 	iFormatSizeLeft -= 16 * ReplaceString(sToFormat, iStringSize, "{ip}", sFullIPv4, false);
 	
 	// SERVER STATUS - SIZE 7
-	iFormatSizeLeft -= 7 * ReplaceString(sToFormat, iStringSize, "{status}", srServer.bServerStatus ? "ONLINE" : "OFFLINE", false);
+	iFormatSizeLeft -= 7 * ReplaceString(sToFormat, iStringSize, "{status}", srServer.bStatus ? "ONLINE" : "OFFLINE", false);
 	
 	// BOTS INCLUDED - SIZE 14
 	iFormatSizeLeft -= 14 * ReplaceString(sToFormat, iStringSize, "{bots}", srServer.bIncludeBots ? "Players & Bots" : "Real Players", false);
@@ -467,7 +514,7 @@ void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, int iSe
 		
 		// Just for the name we will get the full lengh and if we need to remove any string / prefix we will do it here.
 		char sShortServerName[MAX_SERVER_NAME_LENGHT];
-		strcopy(sShortServerName, sizeof(sShortServerName), srServer.sServerName);
+		strcopy(sShortServerName, sizeof(sShortServerName), srServer.sName);
 		
 		// Remove the Prefix string
 		if (!StrEqual(g_sPrefixRemover, "", false))
@@ -487,7 +534,7 @@ void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, int iSe
 		iNumOfFreeCharacters += iClaculateBuffer;
 		
 		// SERVER MAP - MAX SIZE 64
-		iClaculateBuffer = CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty, srServer.sServerMap);
+		iClaculateBuffer = CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty, srServer.sMap);
 		iClaculateBuffer *= ReplaceString(sToFormat, iStringSize, "{map}", sReplaceBuffer, false);
 		iNumOfFreeCharacters += iClaculateBuffer;
 		
@@ -497,7 +544,7 @@ void FormatStringWithServerProperties(char[] sToFormat, int iStringSize, int iSe
 		iNumOfFreeCharacters += iClaculateBuffer;
 		
 		// SERVER FULL NAME - MAX SIZE 245
-		CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty + (iNumOfFreeCharacters > 0 ? iNumOfFreeCharacters : 0), srServer.sServerName);
+		CopyStringWithDots(sReplaceBuffer, iLenghtForEachProperty + (iNumOfFreeCharacters > 0 ? iNumOfFreeCharacters : 0), srServer.sName);
 		ReplaceString(sToFormat, iStringSize, "{longname}", sReplaceBuffer, false);
 	}
 }
@@ -525,7 +572,7 @@ int LoadMenuCategories(Menu mMenu, int client)
 		if(!ClientCanAccessToServer(client, iCurrentServer))
 			continue;
 		
-		for (int iCurrentCategory = 0; iCurrentCategory < srServer.hServerCategories.Length; iCurrentCategory++)
+		for (int iCurrentCategory = 0; iCurrentCategory < srServer.hCategories.Length; iCurrentCategory++)
 		{
 			char sCurrentCategory[MAX_CATEGORY_NAME_LENGHT];
 			srServer.GetCategoryName(iCurrentCategory, sCurrentCategory, sizeof(sCurrentCategory));
@@ -547,15 +594,9 @@ int LoadMenuCategories(Menu mMenu, int client)
 // Check if Category already exists
 bool CategoryAlreadyExist(int iServer, const char[] sCategory)
 {
-	Server srServerToStop, sCurrentServer;
-	srServerToStop = GetServerByIndex(iServer);
-	
 	for (int iCurrentServer = 0; iCurrentServer < iServer; iCurrentServer++)
-	{
-		sCurrentServer = GetServerByIndex(iCurrentServer);
-		if (sCurrentServer.InCategory(sCategory))
+		if (GetServerByIndex(iCurrentServer).InCategory(sCategory))
 			return true;
-	}
 	
 	return false;
 }
@@ -563,17 +604,11 @@ bool CategoryAlreadyExist(int iServer, const char[] sCategory)
 // Check if the client should have access to the server
 bool ClientCanAccessToServer(int client, int iServer)
 {
-	static Server srServerToCheck;
-	srServerToCheck = GetServerByIndex(iServer);
-	
-	return (srServerToCheck.bShowInServerList || CheckCommandAccess(client, "server_redirect_show_hidden_servers", ADMFLAG_ROOT));
+	return (GetServerByIndex(iServer).bShowInServerList || CheckCommandAccess(client, "server_redirect_show_hidden_servers", ADMFLAG_ROOT));
 }
 
 // Check if the client should see reserved slots
 bool CanClientUseReservedSlots(int client, int iServer)
 {
-	static Server srServerToCheck;
-	srServerToCheck = GetServerByIndex(iServer);
-	
-	return (srServerToCheck.iReservedSlots && CheckCommandAccess(client, "server_redirect_use_reserved_slots", ADMFLAG_ROOT));
+	return (GetServerByIndex(iServer).iReservedSlots && CheckCommandAccess(client, "server_redirect_use_reserved_slots", ADMFLAG_ROOT));
 } 
