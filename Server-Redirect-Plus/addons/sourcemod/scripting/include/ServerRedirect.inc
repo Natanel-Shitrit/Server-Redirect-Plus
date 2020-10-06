@@ -43,6 +43,13 @@ enum
 	UPDATE_ADV_MESSAGE
 }
 
+//==[ ADV ACTION ENUM ]==//
+enum
+{
+	ADV_ACTION_UPDATE = 0,
+	ADV_ACTION_EDIT,
+}
+
 //====[ SERVER SEARCH ENUM ]====//
 enum
 {
@@ -81,28 +88,30 @@ enum
 	SQL_FIELD_LAST_UPDATE_UNIX
 }
 
+//===[ ADVERTISEMENTS TABLE STRUCT ]===//
+enum
+{
+	ADVERTISEMENTS_SQL_FIELD_ID = 0,
+	ADVERTISEMENTS_SQL_FIELD_ADVERTISING_SERVER,
+	ADVERTISEMENTS_SQL_FIELD_ADVERTISED_SERVER,
+	ADVERTISEMENTS_SQL_FIELD_REPEAT_TIME,
+	ADVERTISEMENTS_SQL_FIELD_COOLDOWN_TIME,
+	ADVERTISEMENTS_SQL_FIELD_PLAYER_RANGE,
+	ADVERTISEMENTS_SQL_FIELD_MESSAGE
+}
+
 //==[ CATEGORIES TABLE STRUCT ]==//
 enum
 {
-	CATEGORY_SQL_FIELD_NAME = 1,
+	CATEGORY_SQL_FIELD_NAME = 0,
 	CATEGORY_SQL_FIELD_ASSOCIATED_SERVER_STEAM_ID
 }
 
-/**
- * Gets the password of a server by IP.
- *
- * @param iServerIP32		IP32 address.
- * @param sBuffer			Buffer to store the password.
- * @param buffersize		Buffer size.
- *
- * @note stores the password in the given buffer.
- */
-native Native_GetServerPasswordForRedirect(int iServerIP32, char[] sServerPasswordBuffer, int buffersize);
 
 public SharedPlugin __pl_server_redirect = 
 {
-	name = "ServerList",
-	file = "ServerListCore.smx",
+	name = "ServerRedirect",
+	file = "ServerRedirectCore.smx",
 
 	#if defined REQUIRE_PLUGIN
 		required = 1

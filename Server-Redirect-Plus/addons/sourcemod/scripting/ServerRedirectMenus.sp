@@ -3,13 +3,15 @@ public Plugin myinfo =
 	name = "[Server-Redirect+] Menus", 
 	author = "Natanel 'LuqS'", 
 	description = "Menus of 'Server-Redirect+', Loading the information of all other servers and displaying them in the menu.", 
-	version = "2.3.0", 
+	version = "3.0.0", 
 	url = "https://steamcommunity.com/id/luqsgood | Discord: LuqS#6505"
 };
 
 // SQL Callback for LoadServers()
 void T_OnServersReceive(Database owner, DBResultSet results, const char[] sError, any bFirstLoad)
 {
+	#pragma unused owner
+	
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- T_OnServersReceive");
 	

@@ -375,7 +375,7 @@ enum struct Advertisement
 		char sPlayersRange[6];
 		Format(sPlayersRange, sizeof(sPlayersRange), "%d|%d", this.iPlayersRange[0], this.iPlayersRange[1]);
 		
-		DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `advertised_server` = %d, `repeat_time` = %d, `ooldown_time` = %d, `players_range` = '%s', `message` = '%s' WHERE `id` = %d",
+		DB.Format(Query, sizeof(Query), "UPDATE `server_redirect_advertisements` SET `advertised_server` = %d, `repeat_time` = %d, `cooldown_time` = %d, `players_range` = '%s', `message` = '%s' WHERE `id` = %d",
 			this.iAdvertisedServer,
 			this.iRepeatTime,
 			this.iCoolDownTime,
@@ -433,7 +433,7 @@ public Plugin myinfo =
 	name = "[Server-Redirect+] Core", 
 	author = "Natanel 'LuqS'", 
 	description = "Core of 'Server-Redirect+', gathering information about the server and sending it to the SQL Database.", 
-	version = "2.3.0", 
+	version = "3.0.1", 
 	url = "https://steamcommunity.com/id/luqsgood || Discord: LuqS#6505"
 };
 
@@ -566,6 +566,8 @@ public void OnPluginEnd()
 // Main Timer for the Advertisements and updating the player count.
 Action Timer_Loop(Handle timer)
 {
+	#pragma unused timer
+	
 	// If there are no players in the server, don't bother advertising or updating other servers. Because no one can use it / see it.
 	if (!g_srThisServer.iNumOfPlayers)
 		return Plugin_Continue;
@@ -602,6 +604,8 @@ Action Timer_Loop(Handle timer)
 // After the Update-Interval time has passed, updae the server.
 Action Timer_UpdateServerInDatabase(Handle timer)
 {
+	#pragma unused timer
+	
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- Timer_UpdateServerInDatabase");
 	

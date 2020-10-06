@@ -13,16 +13,13 @@ You can set an interval for the advertisement to post every x seconds and even p
 [![Server-Redirect-Plus Demonstration Video](http://img.youtube.com/vi/fOj7ho6Y-6I/0.jpg)](http://www.youtube.com/watch?v=fOj7ho6Y-6I)
 
 ## Download
-To find the latest stable release: ['Server-Redirect+' Releases](https://github.com/Natanel-Shitrit/Server-Redirect-Plus/releases)
-
-Downloading the repository itself is also an option.\
-but, it's not always guaranteed to be stable!
+You can download all needed files from this repository: ['Server-Redirect+' Releases](https://github.com/Natanel-Shitrit/Server-Redirect-Plus/releases)
 
 ## Requirements / Dependencies:
-To compile and use this plugin you need these dependencies on every server:\
- - [Sourcemod 1.10+ Compiler.](https://www.sourcemod.net/downloads.php?branch=1.10)
+To compile and use this plugin you need these dependencies on every server:
+ - [Sourcemod 1.11 Compiler.](https://www.sourcemod.net/downloads.php?branch=dev)
  - [sm-redirect-core](https://github.com/Wend4r/sm-redirect-core)
- - [LobbySessionFixer](https://github.com/komashchenko/LobbySessionFixer)
+ - [LobbySessionFixer](https://github.com/komashchenko/LobbySessionFixer) (This extension should be on all server you wish to redirect to, without it, it wont work!)
  - [PTaH](https://github.com/komashchenko/PTaH)
 
 ## Compile instructions:
@@ -69,15 +66,14 @@ Here's each setting and what it does:
   - `ServerCategories` - Categories of the server in the Server-List Menu.\
   The category section helps you organize your servers and improve the user experience.
   If you want the server to appear in the main menu add `GLOBAL` to the categories 
-  to add multiple commands, separate them with a comma (,).\
+  to add multiple commands, use the template in the config.
   
   - `ShowSeverInServerList` - Whether this server should appear in the Server-List or not.
   
   - `ShowBots` - Whether to include bots in the player count or not.
   
   - `ServerListCommands` - The commnad(s) that will open the Server-List menu.\
-  Note: Commands must start with "sm_", to add multiple commands, separate them with a comma (,).\
-  Example: `"sm_servers,sm_serverlist,sm_sl"`
+  Note: Commands must start with "sm_", to add multiple commands, use the template in the config.\
   
   - `MenuFormat` - This is how the menu will be formatted.\
   See **'Server Assets for 'MenuFormat' and Advertisements'** to see the avilable assets that can be used\

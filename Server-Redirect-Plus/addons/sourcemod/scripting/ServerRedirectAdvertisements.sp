@@ -8,7 +8,7 @@ public Plugin myinfo =
 	name = "[Server-List] Advertisements", 
 	author = "Natanel 'LuqS'", 
 	description = "Advertisements of 'Server-Redirect+', a variety of options to advertise other servers.", 
-	version = "2.3.0", 
+	version = "3.0.0", 
 	url = "https://steamcommunity.com/id/luqsgood | Discord: LuqS#6505"
 };
 
@@ -277,7 +277,10 @@ int AddAdvertisementMenuHandler(Menu AddAdvertisementMenu, MenuAction action, in
 						EditAdvertisementPropertiesMenu(client);
 					}
 					else
+					{
+						CPrintToChat(client, "%t", "ActionCompletedSuccessfully", PREFIX, "Delete");
 						g_advToEdit.DeleteFromDB();
+					}
 				}
 			}
 			
