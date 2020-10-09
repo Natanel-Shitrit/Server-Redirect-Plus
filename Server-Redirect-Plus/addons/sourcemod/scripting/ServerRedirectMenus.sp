@@ -276,9 +276,9 @@ int ServerInfoMenuHandler(Menu ServerInfoMenu, MenuAction action, int client, in
 	if (g_cvPrintDebug.BoolValue)
 		LogMessage(" <-- ServerInfoMenuHandler");
 	
-	// Get the Server-ID from the 'Join Server' item info buffer (index 3)
+	// Get the Server-ID from the 'Join Server' item info buffer (index 4)
 	char cServerID[4];
-	ServerInfoMenu.GetItem(3, cServerID, sizeof(cServerID));
+	ServerInfoMenu.GetItem(4, cServerID, sizeof(cServerID));
 	
 	// Get Server-ID as int
 	int iServer = StringToInt(cServerID);
