@@ -201,28 +201,28 @@
 	
 	"Mode"
 	{
-		"en"	"Mode"
+		"en"		"Mode"
 	}
 	
 	"Loop Time"
 	{
-		"en"	"Loop Time"
+		"en"		"Loop Time"
 	}
 	
 	"Cooldown Time"
 	{
-		"en"	"Cooldown Time"
+		"en"		"Cooldown Time"
 	}
 	
 	"Player Range"
 	{
-		"en"	"Player Range"
+		"en"		"Player Range"
 	}
 	
 	"Message"
 	{
-		"en"	"Message"
-		"pt"	"Mensagem"
+		"en"		"Message"
+		"pt"		"Mensagem"
 	}
 	
 	"MenuAdvAction"
