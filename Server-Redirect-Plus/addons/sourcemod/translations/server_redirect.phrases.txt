@@ -6,6 +6,7 @@
 		// 1 - PREFIX
 		"#format"	"{1:s}"
 		"en"		"{1} {lightred}No servers were found.{default}"
+		"pt"		"{1} {lightred}Nenhum servidor foi encontrado.{default}"
 		"chi"		"{1} {lightred}找不到服务器.{default}"
 		"cze"		"{1} {lightred}Nebyly nalezeny žádné servery{default}"
 	}
@@ -16,9 +17,10 @@
 		// 2 - Max Players
 		// 3 - Server Full Prefix
 		"#format"	"{1:d},{2:d},{3:t}"
-		"en"		"Number of players: {1} / {2} {3}"
-		"chi"		"玩家数量: {1} / {2} {3}"
-		"cze"		"Počet hráčů: {1} / {2} {3}"
+		"en"		"Number of players: {1}/{2} {3}"
+		"pt"		"Número de players: {1}/{2} {3}"
+		"chi"		"玩家数量: {1}/{2} {3}"
+		"cze"		"Počet hráčů: {1}/{2} {3}"
 	}
 	
 	"ServerMapMenu"
@@ -26,13 +28,15 @@
 		// 1 - Server Map Name
 		"#format"	"{1:s}"
 		"en"		"Server Map: {1}"
+		"pt"		"Server Map: {1}"
 		"chi"		"服务器地图: {1}"
 		"cze"		"Mapa serveru: {1}"
 	}
 	
 	"PrintInfoMenu"
 	{
-		"en"		"Print Server INFO in chat"
+		"en"		"Print Server INFO in Chat"
+		"pt"		"Print Info do Servidor no Chat"
 		"chi"		"聊天框显示服务器信息"
 		"cze"		"Poslat informace o serveru do chatu"
 	}
@@ -41,12 +45,14 @@
 	{
 		// 1 - Password
 		"#format"	"{1:s}"
-		"en"		"Password Required: {1} \nOpen the console (~)\n "
+		"en"		"Password Required: {1} \nOpen the console (~)\n"
+		"pt"		"Password Requerido: {1} \nAbra o console (~)\n"
 	}
 	
 	"JoinServerMenu"
 	{
 		"en"		"Join Server!"
+		"pt"		"Entrar no servidor!"
 		"chi"		"加入服务器!"
 		"cze"		"Připojte se k serveru!"
 	}
@@ -58,6 +64,7 @@
 		// 2 - Server Name
 		"#format"	"{1:s},{2:s}"
 		"en"		"{1} {green}'{2}'{default} INFO:"
+		"pt"		"{1} {green}'{2}'{default} INFO:"
 		"chi"		"{1} {green}'{2}'{default} 信息:"
 		"cze"		"{1} {green}'{2}'{default} INFORMACE:"
 	}
@@ -72,6 +79,7 @@
 		// 6 - PORT
 		"#format"	"{1:s},{2:s},{3:s},{4:s},{5:s},{6:d}"
 		"en"		"{1} {red}IP{default}: {2}.{3}.{4}.{5}:{6}"
+		"pt"		"{1} {red}IP{default}: {2}.{3}.{4}.{5}:{6}"
 		"chi"		"{1} {red}IP{default}: {2}.{3}.{4}.{5}:{6}"
 		"cze"		"{1} {red}IP{default}: {2}.{3}.{4}.{5}:{6}"
 	}
@@ -82,6 +90,7 @@
 		// 2 - Map Name
 		"#format"	"{1:s},{2:s}"
 		"en"		"{1} {red}MAP{default}: {2}"
+		"pt"		"{1} {red}MAPA{default}: {2}"
 		"chi"		"{1} {red}地图{default}: {2}"
 		"cze"		"{1} {red}MAPA{default}: {2}"
 	}
@@ -92,16 +101,17 @@
 		// 2 - Number Of Players
 		// 3 - Max players
 		"#format"	"{1:s},{2:d},{3:d}"
-		"en"		"{1} {red}PLAYERS{default}: {2} / {3}"
-		"chi"		"{1} {red}玩家们{default}: {2} / {3}"
-		"cze"		"{1} {red}POČET HRÁČŮ{default}: {2} / {3}"
+		"en"		"{1} {red}PLAYERS{default}: {2}/{3}"
+		"pt"		"{1} {red}PLAYERS{default}: {2}/{3}"
+		"chi"		"{1} {red}玩家们{default}: {2}/{3}"
+		"cze"		"{1} {red}POČET HRÁČŮ{default}: {2}/{3}"
 	}
 	
-	// OTHER //
-	
+	// OTHER //	
 	"ServerOfflineMenu"
 	{
 		"en"		"(SERVER OFFLINE)"
+		"pt"		"(SERVIDOR OFFLINE)"
 		"chi"		"(服务器离线)"
 		"cze"		"(SERVER JE VYPNUT)"
 	}
@@ -109,6 +119,7 @@
 	"ServerFullMenu"
 	{
 		"en"		"[FULL]"
+		"pt"		"[FULL]"
 		"chi"		"[满员]"
 		"cze"		"[PLNÝ]"
 	}
@@ -116,6 +127,7 @@
 	"ServerHiddenMenu"
 	{
 		"en"		"(HIDDEN)"
+		"pt"		"(HIDDEN)"
 		"chi"		"(隐)"
 		"cze"		"(SKRYTÝ)"
 	}
@@ -125,6 +137,7 @@
 		// 1 - Number of reserved slots
 		"#format"	"{1:d}"
 		"en"		"({1} Reserved Slots)"
+		"pt"		"({1} Slots Reservado)"
 		"chi"		"({1} 预留插槽)"
 		"cze"		"({1} Vyhrazené sloty)"
 	}
@@ -134,29 +147,30 @@
 	{
 		// 1 - PREFIX
 		"#format"	"{1:s}"
-		"en"		"{1} Servers: (Click for more info)"
-		"chi"		"{1} 服务器: (点击查看更多)"
-		"cze"		"{1} Servery: (Klikni pro více informací)"
+		"en"		"{1} Servers (Click for more info)"
+		"pt"		"{1} Servidores (Clique para mais informações)"
+		"chi"		"{1} 服务器 (点击查看更多)"
+		"cze"		"{1} Servery (Klikni pro více informací)"
 	}
 	
-	// LoadCategoryMenu //
-	
+	// LoadCategoryMenu //	
 	"MenuTitleCategory"
 	{
 		// 1 - PREFIX
 		"#format"	"{1:s},{2:s}"
-		"en"		"{1} '{2}' Servers: (Click for more info)"
-		"chi"		"{1} '{2}' 服务器: (点击查看更多)"
-		"cze"		"{1} '{2}' Servery: (Klikni pro více informací)"
+		"en"		"{1} '{2}' Servers (Click for more info)"
+		"pt"		"{1} '{2}' Servidores (Clique para mais informações)"
+		"chi"		"{1} '{2}' 服务器 (点击查看更多)"
+		"cze"		"{1} '{2}' Servery (Klikni pro více informací)"
 	}
 	
-	// Command_EditServerRedirectAdvertisements //
-	
+	// Command_EditServerRedirectAdvertisements //	
 	"MenuTitleEditAdvertisements"
 	{
 		// 1 - PREFIX
 		"#format"	"{1:s}"
 		"en"		"{1} Edit Advertisements"
+		"pt"		"{1} Editar Anúncios"
 	}
 
 	"NoAdvertisementsFound"
@@ -164,14 +178,16 @@
 		// 1 - PREFIX //
 		"#format"	"{1:s}"
 		"en"		"{1} {lightred}No Advertisements was found.{default}"
+		"pt"		"{1} {lightred}Nenhum anúncio foi encontrado.{default}"
 	}
-	// EditAdvertisementPropertiesMenu //
 	
+	// EditAdvertisementPropertiesMenu //	
 	"MenuAddAdvServerToAdv"
 	{
 		// 1 - Server To Advertise
 		"#format"	"{1:d}"
 		"en"		"Server to advertise: {1}"
+		"pt"		"Servidor para anunciar: {1}"
 	}
 	
 	"ChangeAdvPropery"
@@ -180,31 +196,33 @@
 		// 2 - Advertisement Value String
 		"#format"	"{1:t},{2:s}"
 		"en"		"Advertisement {1}: {2}"
+		"pt"		"Anúncio {1}: {2}"
 	}
 	
 	"Mode"
 	{
-		"en"	"Mode"
+		"en"		"Mode"
 	}
 	
 	"Loop Time"
 	{
-		"en"	"Loop Time"
+		"en"		"Loop Time"
 	}
 	
 	"Cooldown Time"
 	{
-		"en"	"Cooldown Time"
+		"en"		"Cooldown Time"
 	}
 	
 	"Player Range"
 	{
-		"en"	"Player Range"
+		"en"		"Player Range"
 	}
 	
 	"Message"
 	{
-		"en"	"Message"
+		"en"		"Message"
+		"pt"		"Mensagem"
 	}
 	
 	"MenuAdvAction"
@@ -212,41 +230,46 @@
 		// 1 - Action Translation
 		"#format"	"{1:t}"
 		"en"		"{1} Advertisement"
+		"pt"		"{1} Anúncio"
 		"chi"		"{1} 广告"
 	}
 	
 	"Add"
 	{
 		"en"		"Add"
+		"pt"		"Add"
 		"chi"		"添加"
 	}
 	
 	"Edit"
 	{
 		"en"		"Edit"
+		"pe"		"Editar"
 		"chi"		"编辑"
 	}
 	
 	"Reset"
 	{
 		"en"		"Reset"
+		"pt"		"Reset"
 		"chi"		"重设"
 	}
 	
 	"Delete"
 	{
 		"en"		"Delete"
+		"pt"		"Deletar"
 		"chi"		"删除"
 	}
 	
-	// AddAdvertisementMenuHandler //
-	
+	// AddAdvertisementMenuHandler //	
 	"EditingAdvMessage"
 	{
 		// 1 - Prefix
 		"#format"	"{1:s}"
-		"en"		"{1} {darkred}Editing{default} Message:"
-		"chi"		"{1} {darkred}编辑{default} 消息内容:"
+		"en"		"{1} {darkred}Editing {default}Message:"
+		"en"		"{1} {darkred}Editando {default}Mensagem:"
+		"chi"		"{1} {darkred}编辑 {default}消息内容:"
 	}
 	
 	"EnteredEditingMode"
@@ -254,7 +277,7 @@
 		// 1 - Prefix
 		"#format"	"{1:s}"
 		"en"		"{1} {green}Entered edit mode{default}, please enter the {darkred}value{default} in chat!"
-		"chi"		"{1} {green}进入编辑模式{default}, 请在聊天栏输入 {darkred}数值{default} !"
+		"chi"		"{1} {green}进入编辑模式{default}, 请在聊天栏输入 {darkred}数值{default}!"
 	}
 	
 	"AbortEditingMode"
@@ -273,8 +296,7 @@
 		"en"		"{1} You have successfully {green}{2}ed{default} the {darkred}Advertisement{default}!"
 	}
 	
-	// SelectServerToAdvMenu //
-	
+	// SelectServerToAdvMenu //	
 	"MenuTitleSelectServerToAdv"
 	{
 		// 1 - Prefix
@@ -283,8 +305,7 @@
 		"chi"		"{1} 选择要广播的服务器:"
 	}
 	
-	// SelectServerToAdvCategoryMenu //
-	
+	// SelectServerToAdvCategoryMenu //	
 	"MenuTitleSelectFromCategoryToAdv"
 	{
 		// 1 - Prefix
@@ -294,8 +315,7 @@
 		"chi"		"{1} 从 {2} 选择服务器"
 	}
 	
-	// ADVERTISMENTS ERRORS // 
-	
+	// ADVERTISMENTS ERRORS //	
 	"AdvertisementErrorHeader"
 	{
 		// 1 - Prefix
